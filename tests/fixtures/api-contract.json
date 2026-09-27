@@ -1,0 +1,354 @@
+{
+  "description": "Public TypeScript contract fixture, extracted from the documentation audit; contains no internal implementation audit.",
+  "source": "https://docs.thewidlarzgroup.com/offline-video-sdk/docs/stream-downloader/api-reference",
+  "types": [
+    "Config",
+    "DownloadOptions",
+    "DownloadStatus",
+    "DownloadedAsset",
+    "DRMConfig",
+    "Metadata",
+    "TrackType",
+    "AudioTrack",
+    "TextTrack",
+    "VideoTrack",
+    "AvailableTracksByType"
+  ],
+  "fields": [
+    {
+      "name": "Config.updateFrequencyMS",
+      "declaredType": "number",
+      "required": false
+    },
+    {
+      "name": "Config.maxParallelDownloads",
+      "declaredType": "number",
+      "required": false
+    },
+    {
+      "name": "DownloadOptions.checkStorageBeforeDownload",
+      "declaredType": "boolean",
+      "required": false
+    },
+    {
+      "name": "DownloadOptions.expiresAt",
+      "declaredType": "number",
+      "required": false
+    },
+    {
+      "name": "DownloadOptions.includeAllTracks",
+      "declaredType": "boolean",
+      "required": false
+    },
+    {
+      "name": "DownloadOptions.tracks",
+      "declaredType": "{ video?: string[]; audio?: string[]; text?: string[] }",
+      "required": false
+    },
+    {
+      "name": "DownloadOptions.drm",
+      "declaredType": "DRMConfig",
+      "required": false
+    },
+    {
+      "name": "DownloadOptions.metadata",
+      "declaredType": "Metadata",
+      "required": false
+    },
+    {
+      "name": "DownloadStatus.id",
+      "declaredType": "string",
+      "required": true
+    },
+    {
+      "name": "DownloadStatus.url",
+      "declaredType": "string",
+      "required": true
+    },
+    {
+      "name": "DownloadStatus.receivedBytes",
+      "declaredType": "number",
+      "required": false
+    },
+    {
+      "name": "DownloadStatus.totalBytes",
+      "declaredType": "number",
+      "required": false
+    },
+    {
+      "name": "DownloadStatus.progress",
+      "declaredType": "number",
+      "required": true
+    },
+    {
+      "name": "DownloadStatus.status",
+      "declaredType": "\"pending\" | \"downloading\" | \"paused\" | \"completed\" | \"failed\" | \"removed\"",
+      "required": true
+    },
+    {
+      "name": "DownloadStatus.error",
+      "declaredType": "string",
+      "required": false
+    },
+    {
+      "name": "DownloadStatus.metadata",
+      "declaredType": "Metadata",
+      "required": false
+    },
+    {
+      "name": "DownloadedAsset.id",
+      "declaredType": "string",
+      "required": true
+    },
+    {
+      "name": "DownloadedAsset.url",
+      "declaredType": "string",
+      "required": true
+    },
+    {
+      "name": "DownloadedAsset.pathToFile",
+      "declaredType": "string",
+      "required": true
+    },
+    {
+      "name": "DownloadedAsset.title",
+      "declaredType": "string",
+      "required": true
+    },
+    {
+      "name": "DownloadedAsset.duration",
+      "declaredType": "number",
+      "required": true
+    },
+    {
+      "name": "DownloadedAsset.downloadDate",
+      "declaredType": "number",
+      "required": true
+    },
+    {
+      "name": "DownloadedAsset.expiresAt",
+      "declaredType": "number",
+      "required": false
+    },
+    {
+      "name": "DownloadedAsset.metadata",
+      "declaredType": "Metadata",
+      "required": false
+    },
+    {
+      "name": "DRMConfig.licenseServer",
+      "declaredType": "string",
+      "required": false
+    },
+    {
+      "name": "DRMConfig.certificateUrl",
+      "declaredType": "string",
+      "required": false
+    },
+    {
+      "name": "DRMConfig.headers",
+      "declaredType": "{ [key: string]: string }",
+      "required": false
+    },
+    {
+      "name": "DRMConfig.getLicense",
+      "declaredType": "(spcString: string, contentId: string, licenseUrl: string, loadedLicenseUrl: string) => Promise<string> | string",
+      "required": false
+    },
+    {
+      "name": "Metadata.title",
+      "declaredType": "string",
+      "required": false
+    },
+    {
+      "name": "Metadata.[key: string]",
+      "declaredType": "unknown",
+      "required": "index signature"
+    },
+    {
+      "name": "AudioTrack.id",
+      "declaredType": "string",
+      "required": true
+    },
+    {
+      "name": "AudioTrack.type",
+      "declaredType": "\"audio\"",
+      "required": true
+    },
+    {
+      "name": "AudioTrack.groupId",
+      "declaredType": "string",
+      "required": true
+    },
+    {
+      "name": "AudioTrack.language",
+      "declaredType": "string",
+      "required": false
+    },
+    {
+      "name": "AudioTrack.name",
+      "declaredType": "string",
+      "required": true
+    },
+    {
+      "name": "AudioTrack.isDefault",
+      "declaredType": "boolean",
+      "required": false
+    },
+    {
+      "name": "AudioTrack.autoSelect",
+      "declaredType": "boolean",
+      "required": false
+    },
+    {
+      "name": "AudioTrack.uri",
+      "declaredType": "string",
+      "required": true
+    },
+    {
+      "name": "TextTrack.id",
+      "declaredType": "string",
+      "required": true
+    },
+    {
+      "name": "TextTrack.type",
+      "declaredType": "\"text\"",
+      "required": true
+    },
+    {
+      "name": "TextTrack.groupId",
+      "declaredType": "string",
+      "required": true
+    },
+    {
+      "name": "TextTrack.name",
+      "declaredType": "string",
+      "required": true
+    },
+    {
+      "name": "TextTrack.isDefault",
+      "declaredType": "boolean",
+      "required": false
+    },
+    {
+      "name": "TextTrack.autoSelect",
+      "declaredType": "boolean",
+      "required": false
+    },
+    {
+      "name": "TextTrack.forced",
+      "declaredType": "boolean",
+      "required": false
+    },
+    {
+      "name": "TextTrack.language",
+      "declaredType": "string",
+      "required": false
+    },
+    {
+      "name": "TextTrack.uri",
+      "declaredType": "string",
+      "required": true
+    },
+    {
+      "name": "VideoTrack.id",
+      "declaredType": "string",
+      "required": true
+    },
+    {
+      "name": "VideoTrack.type",
+      "declaredType": "\"video\"",
+      "required": true
+    },
+    {
+      "name": "VideoTrack.bandwidth",
+      "declaredType": "number",
+      "required": true
+    },
+    {
+      "name": "VideoTrack.codecs",
+      "declaredType": "string",
+      "required": false
+    },
+    {
+      "name": "VideoTrack.audioGroupId",
+      "declaredType": "string",
+      "required": false
+    },
+    {
+      "name": "VideoTrack.subtitlesGroupId",
+      "declaredType": "string",
+      "required": false
+    },
+    {
+      "name": "VideoTrack.captionGroupId",
+      "declaredType": "string",
+      "required": false
+    },
+    {
+      "name": "VideoTrack.videoGroupId",
+      "declaredType": "string",
+      "required": false
+    },
+    {
+      "name": "VideoTrack.resolution",
+      "declaredType": "{ width: number; height: number }",
+      "required": false
+    },
+    {
+      "name": "VideoTrack.uri",
+      "declaredType": "string",
+      "required": true
+    },
+    {
+      "name": "VideoTrack.label",
+      "declaredType": "string",
+      "required": false
+    },
+    {
+      "name": "AvailableTracksByType.audio",
+      "declaredType": "AudioTrack[]",
+      "required": true
+    },
+    {
+      "name": "AvailableTracksByType.video",
+      "declaredType": "VideoTrack[]",
+      "required": true
+    },
+    {
+      "name": "AvailableTracksByType.text",
+      "declaredType": "TextTrack[]",
+      "required": true
+    },
+    {
+      "name": "DownloadOptions.tracks.video",
+      "declaredType": "string[]",
+      "required": false
+    },
+    {
+      "name": "DownloadOptions.tracks.audio",
+      "declaredType": "string[]",
+      "required": false
+    },
+    {
+      "name": "DownloadOptions.tracks.text",
+      "declaredType": "string[]",
+      "required": false
+    },
+    {
+      "name": "VideoTrack.resolution.width",
+      "declaredType": "number",
+      "required": "required when resolution is present"
+    },
+    {
+      "name": "VideoTrack.resolution.height",
+      "declaredType": "number",
+      "required": "required when resolution is present"
+    },
+    {
+      "name": "DRMConfig.headers.[key: string]",
+      "declaredType": "string",
+      "required": "index signature"
+    }
+  ]
+}

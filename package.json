@@ -1,0 +1,88 @@
+{
+  "name": "react-native-stream-downloader",
+  "version": "0.1.0",
+  "description": "Offline HLS, DASH and MP4 downloads for React Native with track selection, DRM and react-native-video integration.",
+  "main": "lib/index.js",
+  "types": "lib/index.d.ts",
+  "react-native": "src/index.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/index.d.ts",
+      "react-native": "./src/index.ts",
+      "default": "./lib/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "src",
+    "lib",
+    "android/build.gradle",
+    "android/consumer-rules.pro",
+    "android/src/main",
+    "ios",
+    "StreamDownloader.podspec",
+    "react-native.config.js",
+    "README.md",
+    "LICENSE",
+    "NOTICE",
+    "CHANGELOG.md",
+    "RELEASING.md"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "npm run build && jest --runInBand",
+    "check": "npm run typecheck && npm test",
+    "prepack": "npm run build",
+    "prepublishOnly": "npm run check && npm run verify:package",
+    "verify:package": "node scripts/verify-package.cjs",
+    "release:check": "npm run check && npm run verify:package"
+  },
+  "peerDependencies": {
+    "react": ">=18.2.0",
+    "react-native": ">=0.74.0",
+    "react-native-video": ">=6.15.0 <7"
+  },
+  "devDependencies": {
+    "@types/react": "18.2.79",
+    "jest": "29.7.0",
+    "react": "18.2.0",
+    "react-native": "0.74.7",
+    "react-native-video": "6.15.0",
+    "react-test-renderer": "18.2.0",
+    "typescript": "5.8.3"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/kenji-07/react-native-stream-downloader.git"
+  },
+  "homepage": "https://github.com/kenji-07/react-native-stream-downloader#readme",
+  "bugs": {
+    "url": "https://github.com/kenji-07/react-native-stream-downloader/issues"
+  },
+  "author": "Kenji",
+  "keywords": [
+    "react-native",
+    "react-native-video",
+    "offline",
+    "video",
+    "player",
+    "download",
+    "stream",
+    "video-player",
+    "expo",
+    "hls",
+    "dash",
+    "drm",
+    "widevine",
+    "fairplay"
+  ],
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
+  }
+}

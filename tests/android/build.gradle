@@ -1,0 +1,29 @@
+buildscript {
+    ext {
+        kotlinVersion = '1.9.22'
+        compileSdkVersion = 34
+        targetSdkVersion = 34
+        minSdkVersion = 23
+        buildToolsVersion = '35.0.0'
+        media3Version = '1.4.1'
+    }
+    repositories { google(); mavenCentral() }
+    dependencies {
+        classpath 'com.android.tools.build:gradle:8.2.1'
+        classpath 'org.jetbrains.kotlin:kotlin-gradle-plugin:1.9.22'
+    }
+}
+
+subprojects {
+    pluginManager.withPlugin('com.android.library') {
+        android.compileOptions {
+            sourceCompatibility JavaVersion.VERSION_17
+            targetCompatibility JavaVersion.VERSION_17
+        }
+    }
+    configurations.configureEach {
+        resolutionStrategy.dependencySubstitution {
+            substitute module('com.facebook.react:react-native') using module('com.facebook.react:react-android:0.74.7')
+        }
+    }
+}

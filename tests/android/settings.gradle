@@ -1,0 +1,9 @@
+pluginManagement { repositories { google(); mavenCentral(); gradlePluginPortal() } }
+dependencyResolutionManagement {
+    repositoriesMode.set(RepositoriesMode.PREFER_SETTINGS)
+    repositories { google(); mavenCentral() }
+}
+rootProject.name = 'StreamDownloaderVerification'
+include ':stream-downloader', ':react-native-video'
+project(':stream-downloader').projectDir = file('../../android')
+project(':react-native-video').projectDir = file('../../node_modules/react-native-video/android')

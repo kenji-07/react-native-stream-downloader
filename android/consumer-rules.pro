@@ -1,0 +1,2 @@
+-keep class org.openoffline.streamdownloader.StreamDownloaderModule { *; }
+-keep class org.openoffline.streamdownloader.StreamDownloaderPackage { *; }

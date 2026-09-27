@@ -1,0 +1,12 @@
+react-native-stream-downloader
+Copyright 2026 react-native-stream-downloader contributors
+
+Licensed under the Apache License, Version 2.0. See LICENSE.
+
+This is an independent implementation informed by the public Offline Video SDK
+documentation. 
+
+React Native, react-native-video, AndroidX Media3 and other separately installed
+dependencies retain their own licenses. The Expo example's original template
+notice is retained in example/LICENSE. Test media fixtures were generated
+locally; third-party demo streams are referenced by URL and are not bundled.

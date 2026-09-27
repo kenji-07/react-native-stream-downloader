@@ -1,0 +1,5 @@
+<resources>
+    <string name="stream_downloader_channel">Offline downloads</string>
+    <string name="stream_downloader_notification_title">Saving media for offline playback</string>
+    <string name="stream_downloader_notification_text">Open the app to manage downloads.</string>
+</resources>

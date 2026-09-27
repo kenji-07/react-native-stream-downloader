@@ -1,0 +1,59 @@
+buildscript {
+    repositories { google(); mavenCentral() }
+    dependencies {
+        classpath 'com.android.tools.build:gradle:8.2.1'
+        classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:${rootProject.ext.has('kotlinVersion') ? rootProject.ext.kotlinVersion : '1.9.22'}"
+    }
+}
+
+apply plugin: 'com.android.library'
+apply plugin: 'org.jetbrains.kotlin.android'
+
+def setting = { name, fallback -> rootProject.ext.has(name) ? rootProject.ext.get(name) : fallback }
+def media3Version = setting('media3Version', '1.4.1')
+
+// Respect hosts that centrally manage dependency repositories. The supplied
+// verification/example settings include these repositories for that mode.
+if (findProperty('StreamDownloader_useProjectRepositories') != 'false') {
+    repositories { google(); mavenCentral() }
+}
+
+android {
+    namespace 'org.openoffline.streamdownloader'
+    compileSdkVersion setting('compileSdkVersion', 34)
+    buildToolsVersion setting('buildToolsVersion', '34.0.0')
+    defaultConfig {
+        minSdkVersion 23
+        targetSdkVersion setting('targetSdkVersion', 34)
+        consumerProguardFiles 'consumer-rules.pro'
+    }
+    compileOptions { sourceCompatibility JavaVersion.VERSION_17; targetCompatibility JavaVersion.VERSION_17 }
+    kotlinOptions { jvmTarget = '17' }
+    testOptions { unitTests.returnDefaultValues = true }
+    sourceSets { test.resources.srcDir '../tests/fixtures' }
+}
+
+dependencies {
+    implementation 'com.facebook.react:react-android:0.74.7'
+    implementation project(':react-native-video')
+    implementation "androidx.media3:media3-exoplayer:$media3Version"
+    implementation "androidx.media3:media3-exoplayer-hls:$media3Version"
+    implementation "androidx.media3:media3-exoplayer-dash:$media3Version"
+    implementation "androidx.media3:media3-database:$media3Version"
+    implementation "androidx.media3:media3-datasource:$media3Version"
+    testImplementation 'junit:junit:4.13.2'
+    testImplementation 'org.robolectric:robolectric:4.14.1'
+}
+
+tasks.withType(Test).configureEach {
+    systemProperty 'robolectric.dependency.repo.url', 'https://repo.maven.apache.org/maven2'
+}
+
+// AARs belong to the consuming application, not inside a library AAR. Autolink
+// the conventional app's native-libs directory without changing other modules.
+def applicationProject = rootProject.findProject(':app')
+if (applicationProject != null) {
+    applicationProject.pluginManager.withPlugin('com.android.application') {
+        applicationProject.dependencies.add('implementation', applicationProject.fileTree(dir: 'native-libs', include: ['*.aar']))
+    }
+}
