@@ -61,6 +61,20 @@ function OfflineVideo({ asset }: { asset: DownloadedAsset }) {
 
 Use `getAvailableTracks(url)` for selection IDs and pass them through `DownloadOptions.tracks`. DRM options accept your own `licenseServer`, `certificateUrl` (FairPlay), headers or FairPlay `getLicense` callback. The application must have an entitlement that permits persistent licenses.
 
+### Custom request headers
+
+Streams whose manifest, segments or HLS AES-128 key require authentication take `headers`:
+
+```ts
+const headers = { Authorization: `Bearer ${token}`, 'X-Key-Token': keyToken };
+const available = await getAvailableTracks(url, { headers });
+await downloadStream(url, { headers, metadata: { title: 'Episode 1' } });
+```
+
+The headers go with every media request of that download: manifests and playlists, segments, `#EXT-X-KEY` URIs and progressive MP4 bytes. The key is downloaded with the media, so offline playback needs no headers or network. Headers are stored in protected storage (Android Keystore, iOS Keychain) so background and restarted transfers keep authenticating, and they are never returned to JavaScript. They are not sent to DRM license servers; use `drm.headers` for those. `Host`, `Range`, `Content-Length`, `Transfer-Encoding` and `Connection` are managed by the downloader and rejected.
+
+Headers are part of the download's identity: calling `downloadStream` again with a refreshed token queues a new download rather than updating the old one. Use tokens that outlive the transfer, or cancel and restart. On iOS, HLS headers are applied through AVFoundation's `AVURLAssetHTTPHeaderFieldsKey` asset option (as `react-native-video` does for playback); progressive MP4 and manifest inspection use ordinary request headers. Cookie-only authentication is not covered.
+
 ## Supported implementation paths
 
 - Android: Media3 HLS, static DASH and MP4 downloads; real native track selection; clear MP4 selected-track remux; cache-only playback through unmodified react-native-video; Widevine offline rights and capability-gated Android TV PlayReady.

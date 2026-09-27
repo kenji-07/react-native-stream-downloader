@@ -48,7 +48,7 @@ internal class NativeRuntime private constructor(context: Context) {
     fun serviceStopped(message: String? = null) { background.serviceStopped(message) }
 
     fun attach(module: StreamDownloaderModule) { observer = module }
-    fun tracks(url: String): CompletableFuture<Map<String, Any?>> = queue.execute("getConfig", emptyMap()).thenCompose { engine.tracks(url) }
+    fun tracks(url: String, headers: Map<String, String>): CompletableFuture<Map<String, Any?>> = queue.execute("getConfig", emptyMap()).thenCompose { engine.tracks(url, headers) }
     fun detach(module: StreamDownloaderModule) { if (observer === module) observer = null }
     fun install(): CompletableFuture<Unit> {
         val result = CompletableFuture<Unit>()

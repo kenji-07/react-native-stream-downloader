@@ -170,3 +170,26 @@ test('DRM validation enforces native platform capabilities without inventing end
   await expect(b.api.downloadStream('https://media.test/a.mpd', { drm: {} })).rejects.toMatchObject({ code: 'E_INVALID_DRM' });
   await expect(b.api.downloadStream('https://media.test/a.mpd', { drm: { licenseServer: 'https://license.test', headers: { Authorization: 'a\r\nb' } } })).rejects.toMatchObject({ code: 'E_INVALID_DRM' });
 });
+
+test('media request headers reach native admission and track inspection unchanged', async () => {
+  const b = boot(); await b.api.registerPlugin();
+  b.replies.set('downloadStream', status());
+  const headers = { Authorization: 'Bearer abc', 'X-Key-Token': 'k=1; v' };
+  await b.api.downloadStream('https://media.test/master.m3u8', { headers });
+  expect(b.commands.at(-1).params).toEqual({ url: 'https://media.test/master.m3u8', options: { headers } });
+  await b.api.getAvailableTracks('https://media.test/master.m3u8', { headers });
+  expect(b.commands.at(-1).params).toEqual({ url: 'https://media.test/master.m3u8', headers });
+  await b.api.getAvailableTracks('https://media.test/master.m3u8');
+  expect(b.commands.at(-1).params).toEqual({ url: 'https://media.test/master.m3u8' });
+});
+
+test('invalid media request headers never reach native code', async () => {
+  const b = boot(); await b.api.registerPlugin();
+  for (const headers of [null, 'Authorization: x', { 'Bad Name': 'x' }, { 'X-Token': 'a\nb' }, { 'X-Token': 1 },
+    { Range: 'bytes=0-1' }, { host: 'other.test' }, { authorization: 'a', Authorization: 'b' }]) {
+    await expect(b.api.downloadStream('https://media.test/a.m3u8', { headers })).rejects.toMatchObject({ code: 'E_INVALID_ARGUMENT' });
+    await expect(b.api.getAvailableTracks('https://media.test/a.m3u8', { headers })).rejects.toMatchObject({ code: 'E_INVALID_ARGUMENT' });
+  }
+  await expect(b.api.getAvailableTracks('https://media.test/a.m3u8', { tracks: {} })).rejects.toMatchObject({ code: 'E_INVALID_ARGUMENT' });
+  expect(b.commands).toHaveLength(1);
+});

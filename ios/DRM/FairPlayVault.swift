@@ -2,8 +2,9 @@ import Foundation
 import Security
 import CryptoKit
 
-/// Only opaque AVFoundation persistable blobs and provider configuration enter
-/// this device-bound Keychain. No content key is extracted or serialized.
+/// Only opaque AVFoundation persistable blobs and provider configuration
+/// (including media request headers) enter this device-bound Keychain. No
+/// content key is extracted or serialized.
 final class FairPlayVault {
     static let shared = FairPlayVault()
     private let lock = NSRecursiveLock()
@@ -40,6 +41,20 @@ final class FairPlayVault {
         lock.lock(); defer { lock.unlock() }
         guard let data = try read("config:" + assetID) else { return nil }
         return try JSONDecoder().decode([String: JSONValue].self, from: data)
+    }
+    func saveHeaders(_ headers: [String: JSONValue], assetID: String) throws {
+        lock.lock(); defer { lock.unlock() }
+        try write("headers:" + assetID, JSONEncoder().encode(headers))
+    }
+    func headers(_ assetID: String) throws -> [String: JSONValue]? {
+        lock.lock(); defer { lock.unlock() }
+        guard let data = try read("headers:" + assetID) else { return nil }
+        return try JSONDecoder().decode([String: JSONValue].self, from: data)
+    }
+    func removeHeaders(_ assetID: String) throws {
+        lock.lock(); defer { lock.unlock() }
+        let status = SecItemDelete(query("headers:" + assetID) as CFDictionary)
+        guard status == errSecSuccess || status == errSecItemNotFound else { throw failure() }
     }
     private func keys(_ assetID: String) throws -> [String: Data] {
         guard let data = try read("keys:" + assetID) else { return [:] }

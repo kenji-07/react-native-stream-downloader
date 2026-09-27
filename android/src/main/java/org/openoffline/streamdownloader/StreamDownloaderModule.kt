@@ -42,7 +42,8 @@ class StreamDownloaderModule(private val context: ReactApplicationContext) : Rea
                     native.install().get()
                 } else if (runtimeId != incoming && method !in setOf("disablePlugin", "getConfig", "setConfig")) throw DownloadFailure("E_NOT_REGISTERED", "The JavaScript runtime is not registered.")
                 val operation = method
-                val task = if (method == "getAvailableTracks") native.tracks(params["url"] as String) else native.queue.execute(method, params)
+                @Suppress("UNCHECKED_CAST")
+                val task = if (method == "getAvailableTracks") native.tracks(params["url"] as String, params["headers"] as Map<String, String>) else native.queue.execute(method, params)
                 task.whenComplete { result, error ->
                     if (error != null) reject(promise, error, operation) else promise.resolve(bridgeValue(result))
                 }

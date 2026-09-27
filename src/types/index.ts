@@ -36,6 +36,18 @@ export interface DownloadOptions {
   tracks?: { video?: string[]; audio?: string[]; text?: string[] };
   drm?: DRMConfig;
   metadata?: Metadata;
+  /**
+   * HTTP headers sent with every media request of this download: manifests and
+   * playlists, segments, HLS AES-128 key URIs and progressive MP4 bytes. They are
+   * stored with the queued download so background resume keeps authenticating.
+   * DRM license requests use `drm.headers` instead.
+   */
+  headers?: { [key: string]: string };
+}
+
+export interface AvailableTracksOptions {
+  /** HTTP headers sent with manifest and media inspection requests. */
+  headers?: { [key: string]: string };
 }
 
 export interface DownloadStatus {

@@ -1,4 +1,4 @@
-import type { Config, DownloadOptions, DRMConfig, Metadata } from '../types';
+import type { AvailableTracksOptions, Config, DownloadOptions, DRMConfig, Metadata } from '../types';
 import { DownloaderError } from './errors';
 
 export function object(value: unknown, label: string): Record<string, unknown> {
@@ -137,6 +137,34 @@ export function metadata(value: unknown): Metadata {
   return result;
 }
 
+// The transport owns these; a caller-supplied Range would corrupt segmented
+// transfers and resume, and the others describe the connection itself.
+const reservedHeaders = ['host', 'range', 'content-length', 'transfer-encoding', 'connection'];
+
+function headers(value: unknown, label: string, code: string): Record<string, string> {
+  const input = object(value, label);
+  const result = Object.create(null) as Record<string, string>;
+  const seen = new Set<string>();
+  for (const [key, entry] of Object.entries(input)) {
+    const header = string(entry, `${label} value`);
+    const name = key.toLowerCase();
+    if (!/^[!#$%&'*+.^_`|~\da-z-]+$/i.test(key) || /[\r\n\u0000]/.test(header)) {
+      throw new DownloaderError(code, `${label} contain invalid characters.`);
+    }
+    if (seen.has(name)) throw new DownloaderError(code, `${label} repeat the ${key} header.`);
+    seen.add(name);
+    result[key] = header;
+  }
+  return result;
+}
+
+function mediaHeaders(value: unknown, label: string): Record<string, string> {
+  const result = headers(value, label, 'E_INVALID_ARGUMENT');
+  const reserved = Object.keys(result).find(key => reservedHeaders.includes(key.toLowerCase()));
+  if (reserved) throw new DownloaderError('E_INVALID_ARGUMENT', `${label} cannot set ${reserved}; the downloader manages it.`);
+  return result;
+}
+
 export function drm(value: unknown, platform: string): DRMConfig {
   const input = object(value, 'drm');
   keys(input, ['licenseServer', 'certificateUrl', 'headers', 'getLicense'], 'drm');
@@ -150,24 +178,21 @@ export function drm(value: unknown, platform: string): DRMConfig {
   }
   if (platform === 'ios' && !result.certificateUrl) throw new DownloaderError('E_INVALID_DRM', 'FairPlay requires certificateUrl.');
   if (!result.licenseServer && !result.getLicense) throw new DownloaderError('E_INVALID_DRM', 'DRM requires licenseServer or an iOS getLicense callback.');
-  if (input.headers !== undefined) {
-    const headers = object(input.headers, 'drm.headers');
-    result.headers = Object.create(null) as Record<string, string>;
-    for (const [key, entry] of Object.entries(headers)) {
-      const header = string(entry, 'DRM header');
-      if (!/^[!#$%&'*+.^_`|~\da-z-]+$/i.test(key) || /[\r\n\u0000]/.test(header)) {
-        throw new DownloaderError('E_INVALID_DRM', 'DRM headers contain invalid characters.');
-      }
-      result.headers[key] = header;
-    }
-  }
+  if (input.headers !== undefined) result.headers = headers(input.headers, 'drm.headers', 'E_INVALID_DRM');
   return result;
+}
+
+export function trackOptions(value: unknown): AvailableTracksOptions {
+  if (value === undefined) return {};
+  const input = object(value, 'options');
+  keys(input, ['headers'], 'options');
+  return input.headers === undefined ? {} : { headers: mediaHeaders(input.headers, 'headers') };
 }
 
 export function options(value: unknown, platform: string): DownloadOptions {
   if (value === undefined) return {};
   const input = object(value, 'options');
-  keys(input, ['checkStorageBeforeDownload', 'expiresAt', 'includeAllTracks', 'tracks', 'drm', 'metadata'], 'options');
+  keys(input, ['checkStorageBeforeDownload', 'expiresAt', 'includeAllTracks', 'tracks', 'drm', 'metadata', 'headers'], 'options');
   const result: DownloadOptions = {};
   for (const key of ['checkStorageBeforeDownload', 'includeAllTracks'] as const) {
     if (input[key] !== undefined) result[key] = boolean(input[key], key);
@@ -175,6 +200,7 @@ export function options(value: unknown, platform: string): DownloadOptions {
   if (input.expiresAt !== undefined) result.expiresAt = integer(input.expiresAt, 'expiresAt');
   if (input.metadata !== undefined) result.metadata = metadata(input.metadata);
   if (input.drm !== undefined) result.drm = drm(input.drm, platform);
+  if (input.headers !== undefined) result.headers = mediaHeaders(input.headers, 'headers');
   if (input.tracks !== undefined) {
     const tracks = object(input.tracks, 'tracks');
     keys(tracks, ['video', 'audio', 'text'], 'tracks');

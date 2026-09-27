@@ -64,21 +64,22 @@ class Media3Engine(context: Context, private val routes: OfflineRoutes,
     internal fun drmConfiguration(drm: OfflineDrm) = rights.configuration(drm)
     internal fun drmProvider(drm: OfflineDrm?) = rights.playbackProvider(drm)
 
-    fun factory(id: String, online: Boolean): CacheDataSource.Factory = CacheDataSource.Factory()
+    /** Offline factories have no upstream, so request headers only apply while online. */
+    fun factory(id: String, online: Boolean, headers: Map<String, String> = emptyMap()): CacheDataSource.Factory = CacheDataSource.Factory()
         .setCache(cache)
         .setCacheKeyFactory { spec -> "$id:${spec.key ?: spec.uri}" }
-        .setUpstreamDataSourceFactory(if (online) network.wrap(http) else null)
+        .setUpstreamDataSourceFactory(if (online) network.wrap(RequestHeaders.wrap(http, headers)) else null)
         .also { if (!online) it.setCacheWriteDataSinkFactory(null) }
 
-    fun tracks(url: String): CompletableFuture<Map<String, Any?>> = CompletableFuture.supplyAsync({
-        try { MediaCatalog(network.wrap(http)).inspect(url).publicTracks() }
+    fun tracks(url: String, headers: Map<String, String> = emptyMap()): CompletableFuture<Map<String, Any?>> = CompletableFuture.supplyAsync({
+        try { MediaCatalog(network.wrap(RequestHeaders.wrap(http, headers))).inspect(url).publicTracks() }
         catch (error: Exception) { throw failure(error) }
     }, workers)
 
-    private fun downloader(item: MediaItem, id: String, online: Boolean): Downloader = when (item.localConfiguration?.mimeType) {
-        MimeTypes.APPLICATION_M3U8 -> HlsDownloader(item, factory(id, online))
-        MimeTypes.APPLICATION_MPD -> DashDownloader(item, factory(id, online))
-        else -> ProgressiveDownloader(item, factory(id, online))
+    private fun downloader(item: MediaItem, id: String, online: Boolean, headers: Map<String, String> = emptyMap()): Downloader = when (item.localConfiguration?.mimeType) {
+        MimeTypes.APPLICATION_M3U8 -> HlsDownloader(item, factory(id, online, headers))
+        MimeTypes.APPLICATION_MPD -> DashDownloader(item, factory(id, online, headers))
+        else -> ProgressiveDownloader(item, factory(id, online, headers))
     }
 
     override fun start(record: Record, progress: (TransferProgress) -> Unit, finished: (TransferResult) -> Unit): Transfer {
@@ -93,12 +94,13 @@ class Media3Engine(context: Context, private val routes: OfflineRoutes,
             var total: Long? = null
             var request: DownloadRequest? = null
             val started = System.currentTimeMillis()
+            val headers = RequestHeaders.of(record.options)
             fun checkStopped() { if (stopped.get()) throw InterruptedException() }
             val outcome = try {
                 checkStopped()
                 // Read through the same cache used for transfer. Resume keeps the
                 // original manifest snapshot and cannot silently switch selections.
-                val inspector = MediaCatalog(factory(record.id, true))
+                val inspector = MediaCatalog(factory(record.id, true, headers))
                 val catalog = inspector.inspect(record.url)
                 checkStopped()
                 val selected = catalog.select(record.options)
@@ -118,7 +120,7 @@ class Media3Engine(context: Context, private val routes: OfflineRoutes,
                         // Some DASH manifests signal the scheme but carry PSSH only
                         // in initialization segments. DownloadHelper demuxes metadata
                         // without requesting or decrypting a streaming license.
-                        val probe = NativeTrackProbe.inspect(MediaItem.Builder().setUri(record.url).setMimeType(mime).setStreamKeys(keys).build(), factory(record.id, true))
+                        val probe = NativeTrackProbe.inspect(MediaItem.Builder().setUri(record.url).setMimeType(mime).setStreamKeys(keys).build(), factory(record.id, true, headers))
                         formats = (formats + probe.filter { it.drmInitData != null }).distinct()
                     }
                     synchronized(cancellation) { checkStopped(); acquiringLicense.set(true) }
@@ -136,7 +138,7 @@ class Media3Engine(context: Context, private val routes: OfflineRoutes,
                 }
                 request = DownloadRequest.Builder(record.id, Uri.parse(record.url)).setMimeType(mime).setStreamKeys(keys).build()
                 journal.putDownload(Download(request, Download.STATE_DOWNLOADING, started, started, -1, 0, 0))
-                val transfer = downloader(request.toMediaItem(), record.id, true)
+                val transfer = downloader(request.toMediaItem(), record.id, true, headers)
                 current.set(transfer); checkStopped()
                 transfer.download { length, bytes, percent ->
                     checkStopped()

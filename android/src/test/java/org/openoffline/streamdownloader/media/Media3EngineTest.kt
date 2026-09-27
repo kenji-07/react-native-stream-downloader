@@ -11,6 +11,9 @@ import java.util.Collections
 import java.util.UUID
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.TimeUnit
+import javax.crypto.Cipher
+import javax.crypto.spec.IvParameterSpec
+import javax.crypto.spec.SecretKeySpec
 import org.junit.Assert.*
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -23,7 +26,7 @@ import org.robolectric.annotation.Config
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34], manifest = Config.NONE)
 class Media3EngineTest {
-    private class FixtureSource(val resources: Map<String, ByteArray>) : DataSource.Factory {
+    private class FixtureSource(val resources: Map<String, ByteArray>, val requiredHeaders: Map<String, String> = emptyMap()) : DataSource.Factory {
         val requests: MutableList<String> = Collections.synchronizedList(mutableListOf())
         val requestURIs: MutableList<String> = Collections.synchronizedList(mutableListOf())
         override fun createDataSource(): DataSource = object : DataSource {
@@ -33,6 +36,7 @@ class Media3EngineTest {
             private var end = 0
             override fun open(spec: DataSpec): Long {
                 current = spec.uri; val path = spec.uri.path!!; requests.add(path); requestURIs.add(spec.uri.toString())
+                if (requiredHeaders.any { (name, value) -> spec.httpRequestHeaders[name] != value }) throw IOException("Unauthorized fixture request: $path")
                 bytes = resources[path] ?: throw IOException("Unexpected fixture request: $path")
                 position = spec.position.toInt()
                 if (position > bytes.size) throw IOException("Out of range")
@@ -103,6 +107,54 @@ class Media3EngineTest {
             assertTrue(forbiddenNetwork.requests.isEmpty())
             engine.delete(reopened); assertFalse(engine.valid(reopened)); assertNull(routes.get(playerSource.uri))
         } finally { engine.close(); store.close() }
+    }
+
+    @Test fun aesHlsSendsRequestHeadersToPlaylistsSegmentsAndKeyAndCachesTheKeyForOfflinePlayback() {
+        val key = ByteArray(16) { (it * 7 + 3).toByte() }
+        fun crypt(mode: Int, bytes: ByteArray, sequence: Int): ByteArray = Cipher.getInstance("AES/CBC/PKCS5Padding").run {
+            // Without an IV attribute, HLS uses the media sequence number as the IV.
+            init(mode, SecretKeySpec(key, "AES"), IvParameterSpec(ByteArray(16).also { it[15] = sequence.toByte() }))
+            doFinal(bytes)
+        }
+        val playlist = fixture("hls/media.m3u8").toString(Charsets.UTF_8)
+            .replace("#EXT-X-PLAYLIST-TYPE:VOD\n", "#EXT-X-PLAYLIST-TYPE:VOD\n#EXT-X-KEY:METHOD=AES-128,URI=\"https://keys.fixture.test/key\"\n")
+        val master = "#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=100000,RESOLUTION=160x90,CODECS=\"avc1.640009,mp4a.40.2\"\nvideo/media.m3u8\n"
+        val headers = mapOf("Authorization" to "Bearer fixture", "X-Key-Token" to "k1")
+        val resources = mapOf("/master" to master.toByteArray(), "/video/media.m3u8" to playlist.toByteArray(), "/key" to key,
+            "/video/segment0.ts" to crypt(Cipher.ENCRYPT_MODE, fixture("hls/segment0.ts"), 0),
+            "/video/segment1.ts" to crypt(Cipher.ENCRYPT_MODE, fixture("hls/segment1.ts"), 1))
+        val context = RuntimeEnvironment.getApplication(); val routes = OfflineRoutes()
+        val source = FixtureSource(resources, headers)
+        val engine = Media3Engine(context, routes, source)
+        try {
+            val unauthorized = CompletableFuture<TransferResult>()
+            engine.start(record("https://fixture.test/master"), {}, unauthorized::complete)
+            assertTrue(unauthorized.get(30, TimeUnit.SECONDS) is TransferResult.Failed)
+            source.requests.clear()
+
+            val done = complete(engine, record("https://fixture.test/master", mapOf("headers" to headers)))
+            assertEquals(2000L, done.asset!!.duration)
+            assertTrue(source.requests.containsAll(listOf("/master", "/video/media.m3u8", "/key", "/video/segment0.ts", "/video/segment1.ts")))
+            assertTrue(engine.valid(done))
+            routes.committed(done)
+            val forbiddenNetwork = FixtureSource(emptyMap())
+            val plugin = OfflineVideoPlugin(routes, engine)
+            val playerSource = Source().apply { uri = Uri.parse(done.asset!!.path) }
+            val cached = plugin.overrideMediaDataSourceFactory(playerSource, forbiddenNetwork)!!
+            fun read(url: String): ByteArray {
+                val reader = cached.createDataSource()
+                try {
+                    reader.open(DataSpec(Uri.parse(url)))
+                    val output = java.io.ByteArrayOutputStream(); val buffer = ByteArray(4096)
+                    while (true) { val count = reader.read(buffer, 0, buffer.size); if (count < 0) break; output.write(buffer, 0, count) }
+                    return output.toByteArray()
+                } finally { reader.close() }
+            }
+            assertArrayEquals(key, read("https://keys.fixture.test/key"))
+            assertArrayEquals(fixture("hls/segment0.ts"), crypt(Cipher.DECRYPT_MODE, read("https://fixture.test/video/segment0.ts"), 0))
+            assertTrue(forbiddenNetwork.requests.isEmpty())
+            engine.delete(done)
+        } finally { engine.close() }
     }
 
     @Test fun hlsKeepsTrackSelectionsWhenMuxTransportSignaturesRotateAndFetchesTheNewURI() {

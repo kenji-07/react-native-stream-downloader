@@ -54,7 +54,8 @@ final class NativeMediaEngine: MediaEngine {
                 let keys = record.options["drm"] == nil ? nil : try FairPlaySession(record: record, offlineOnly: false)
                 let inspection: MediaInspection
                 do {
-                    inspection = try await NativeMediaCatalog.inspect(url, wifiOnly: record.options["_wifiOnly"]?.bool ?? false, prepareAsset: { keys?.attach($0) })
+                    inspection = try await NativeMediaCatalog.inspect(url, wifiOnly: record.options["_wifiOnly"]?.bool ?? false,
+                        headers: NativeMediaCatalog.headers(record.options), prepareAsset: { keys?.attach($0) })
                     try Task.checkCancellation()
                 } catch { keys?.cancel(); throw error }
                 if inspection.kind == "hls" {

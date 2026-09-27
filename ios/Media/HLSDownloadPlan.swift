@@ -15,7 +15,8 @@ struct HLSDownloadPlan {
         var requiresDRM = !manifest.isMaster && manifest.needsDRM
         var keyIdentifiers = Set<String>()
         if requiresDRM && options["drm"] == nil { throw OfflineError(code: "E_DRM_REQUIRED", message: "Encrypted HLS requires persistent FairPlay configuration.") }
-        let (rootData, rootURL) = try await NativeMediaCatalog.read(inspection.asset.url, wifiOnly: options["_wifiOnly"]?.bool ?? false)
+        let headers = NativeMediaCatalog.headers(options)
+        let (rootData, rootURL) = try await NativeMediaCatalog.read(inspection.asset.url, wifiOnly: options["_wifiOnly"]?.bool ?? false, headers: headers)
         let currentRoot = try HLSManifest(data: rootData, baseURL: rootURL)
         guard currentRoot.fingerprint == manifest.fingerprint else {
             throw OfflineError(code: "E_INVALID_TRACKS", message: "The HLS playlist changed during track preparation.")
@@ -38,7 +39,7 @@ struct HLSDownloadPlan {
             let urls = Set(selected.compactMap(\.uri))
             for url in urls {
                 try Task.checkCancellation()
-                let (data, base) = try await NativeMediaCatalog.read(url, wifiOnly: options["_wifiOnly"]?.bool ?? false)
+                let (data, base) = try await NativeMediaCatalog.read(url, wifiOnly: options["_wifiOnly"]?.bool ?? false, headers: headers)
                 let child = try HLSManifest(data: data, baseURL: base)
                 guard !child.isMaster, child.finite else { throw OfflineError(code: "E_UNSUPPORTED_MEDIA", message: "Each selected HLS rendition must be a finite VOD playlist.") }
                 if child.needsDRM {
@@ -113,7 +114,7 @@ struct HLSDownloadPlan {
                 }
             }
             guard !excludedTypes.isEmpty, let url = variant.uri else { continue }
-            let child = AVURLAsset(url: url, options: [AVURLAssetAllowsCellularAccessKey: !(options["_wifiOnly"]?.bool ?? false)]); prepareAsset?(child)
+            let child = AVURLAsset(url: url, options: NativeMediaCatalog.assetOptions(wifiOnly: options["_wifiOnly"]?.bool ?? false, headers: NativeMediaCatalog.headers(options))); prepareAsset?(child)
             let nativeTracks = try await child.load(.tracks)
             if nativeTracks.contains(where: { track in
                 (excludedTypes.contains("audio") && track.mediaType == .audio) ||

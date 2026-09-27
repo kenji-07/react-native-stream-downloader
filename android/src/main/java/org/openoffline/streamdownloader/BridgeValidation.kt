@@ -23,6 +23,17 @@ internal object BridgeValidation {
     }
     @Suppress("UNCHECKED_CAST") fun map(value: Any?): Map<String, Any?> = (value as? Map<*, *>)?.takeIf { it.keys.all { key -> key is String } } as? Map<String, Any?> ?: invalid("Expected an object.")
     private fun keys(value: Map<String, Any?>, allowed: Set<String>) { if ((value.keys - allowed).isNotEmpty()) invalid("Unsupported object property.") }
+    private val headerName = Regex("[!#$%&'*+.^_`|~0-9A-Za-z-]+")
+    // Media3 owns Range for segments and resume; the rest describe the connection.
+    private val reservedHeaders = setOf("host", "range", "content-length", "transfer-encoding", "connection")
+    private fun headers(value: Any?, media: Boolean): Map<String, String> {
+        val seen = mutableSetOf<String>()
+        return map(value).mapValues { (key, item) ->
+            if (!headerName.matches(key) || item !is String || item.any { c -> c == '\r' || c == '\n' || c == '\u0000' } || !seen.add(key.lowercase())) invalid("HTTP headers are invalid.")
+            if (media && key.lowercase() in reservedHeaders) invalid("HTTP headers cannot set $key.")
+            item
+        }
+    }
 
     fun params(method: String, value: Map<String, Any?>): Map<String, Any?> = when (method) {
         "registerPlugin", "disablePlugin", "getConfig", "getDownloadsStatus", "getDownloadedAssets", "cancelAllDownloads", "deleteAllDownloadedAssets", "deleteAllQueuedItems" -> { keys(value, emptySet()); emptyMap() }
@@ -48,14 +59,17 @@ internal object BridgeValidation {
             keys(value, setOf("id", "drm"))
             mapOf("id" to string(value["id"])) + if (value.containsKey("drm")) options(mapOf("drm" to value["drm"])) else emptyMap()
         }
-        "getAvailableTracks" -> mapOf("url" to url(value["url"]))
+        "getAvailableTracks" -> {
+            keys(value, setOf("url", "headers"))
+            mapOf("url" to url(value["url"]), "headers" to (value["headers"]?.let { headers(it, true) } ?: emptyMap()))
+        }
         "expireDownloadedAssetAt" -> mapOf("id" to string(value["id"]), "timestamp" to number(value["timestamp"]))
         "cancelDownload", "pauseDownload", "resumeDownload", "getDownloadStatus", "getDownloadedAsset", "deleteDownloadedAsset", "deleteQueuedItem" -> mapOf("id" to string(value["id"]))
         else -> throw DownloadFailure("E_BRIDGE", "Unknown native operation.")
     }
 
     private fun options(value: Map<String, Any?>): Map<String, Any?> {
-        keys(value, setOf("checkStorageBeforeDownload", "expiresAt", "includeAllTracks", "tracks", "drm", "metadata"))
+        keys(value, setOf("checkStorageBeforeDownload", "expiresAt", "includeAllTracks", "tracks", "drm", "metadata", "headers"))
         val result = value.toMutableMap()
         listOf("checkStorageBeforeDownload", "includeAllTracks").forEach { if (value.containsKey(it) && value[it] !is Boolean) invalid("Download flags must be boolean.") }
         value["expiresAt"]?.let { result["expiresAt"] = number(it) }
@@ -77,10 +91,9 @@ internal object BridgeValidation {
             if (drm.containsKey("callbackRef")) throw DownloadFailure("E_UNSUPPORTED_CAPABILITY", "Custom FairPlay callbacks are only supported on iOS.")
             url(drm["licenseServer"])
             drm["certificateUrl"]?.let { certificate -> url(certificate) }
-            drm["headers"]?.let { headers -> map(headers).forEach { (key, item) ->
-                if (!Regex("[!#$%&'*+.^_`|~0-9A-Za-z-]+").matches(key) || item !is String || item.any { c -> c == '\r' || c == '\n' || c == '\u0000' }) invalid("DRM headers are invalid.")
-            } }
+            drm["headers"]?.let { headers(it, false) }
         }
+        value["headers"]?.let { result["headers"] = headers(it, true) }
         return result
     }
 }

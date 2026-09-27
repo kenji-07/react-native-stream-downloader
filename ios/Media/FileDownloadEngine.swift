@@ -184,8 +184,14 @@ final class FileDownloadEngine: NSObject, MediaEngine, URLSessionDownloadDelegat
         let task: URLSessionDownloadTask
         if FileManager.default.fileExists(atPath: resumeURL.path) {
             task = downloadSession(record).downloadTask(withResumeData: try Data(contentsOf: resumeURL)); job.usedResumeData = true
-        } else { task = downloadSession(record).downloadTask(with: url) }
+        } else { task = downloadSession(record).downloadTask(with: request(record, url)) }
         try launch(task, job: job); return job
+    }
+    /// Mirrors the session's cache and timeout policy; resume data keeps these headers.
+    private func request(_ record: DownloadRecord, _ url: URL) -> URLRequest {
+        var request = URLRequest(url: url, cachePolicy: .reloadIgnoringLocalCacheData, timeoutInterval: 30)
+        for (name, value) in NativeMediaCatalog.headers(record.options) { request.setValue(value, forHTTPHeaderField: name) }
+        return request
     }
     private func launch(_ task: URLSessionDownloadTask, job: Job) throws {
         task.taskDescription = job.record.id
@@ -360,7 +366,7 @@ final class FileDownloadEngine: NSObject, MediaEngine, URLSessionDownloadDelegat
             job.usedResumeData = false
             do {
                 if FileManager.default.fileExists(atPath: job.resumeURL.path) { try FileManager.default.removeItem(at: job.resumeURL) }
-                try launch(session.downloadTask(with: url), job: job); return
+                try launch(session.downloadTask(with: request(job.record, url)), job: job); return
             } catch { noteFailure(id, OfflineError.media(error)); return }
         }
         // A cancelled restored task with no Job belongs to user pause or native
