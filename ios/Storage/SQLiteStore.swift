@@ -6,6 +6,8 @@ final class SQLiteStore: RecordStore {
     private let encoder = JSONEncoder()
     private let decoder = JSONDecoder()
     private let transient = unsafeBitCast(-1, to: sqlite3_destructor_type.self)
+    // Progress saves rewrite a record often; only touch the Keychain when headers change.
+    private var protectedHeaders: [String: JSONValue] = [:]
     init(directory: URL) throws {
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         var root = directory
@@ -53,6 +55,14 @@ final class SQLiteStore: RecordStore {
                     options["drm"] = try JSONSerialization.jsonObject(with: encoder.encode(JSONValue.object(configuration)))
                     document["options"] = options
                 }
+                if let id = document["id"] as? String, document["protectedHeaders"] as? Bool == true, var options = document["options"] as? [String: Any] {
+                    // A missing Keychain item drops the headers; the server then rejects the transfer visibly.
+                    if let headers = try FairPlayVault.shared.headers(id) {
+                        options["headers"] = try JSONSerialization.jsonObject(with: encoder.encode(JSONValue.object(headers)))
+                        protectedHeaders[id] = .object(headers)
+                    }
+                    document["options"] = options
+                }
                 let restored = try JSONSerialization.data(withJSONObject: document)
                 result.append(try decoder.decode(DownloadRecord.self, from: restored))
             }
@@ -68,6 +78,14 @@ final class SQLiteStore: RecordStore {
             options["drm"] = try JSONSerialization.jsonObject(with: encoder.encode(JSONValue.object(["protectedConfiguration": .bool(true)])))
             document["options"] = options
         }
+        if let headers = record.options["headers"], case let .object(values) = headers {
+            if protectedHeaders[record.id] != headers {
+                try FairPlayVault.shared.saveHeaders(values, assetID: record.id); protectedHeaders[record.id] = headers
+            }
+            guard var options = document["options"] as? [String: Any] else { throw failure() }
+            options.removeValue(forKey: "headers"); document["options"] = options
+            document["protectedHeaders"] = true
+        }
         let data = try JSONSerialization.data(withJSONObject: document)
         let query = try statement("INSERT OR REPLACE INTO downloads (id, document) VALUES (?, ?)"); defer { sqlite3_finalize(query) }
         guard sqlite3_bind_text(query, 1, record.id, -1, transient) == SQLITE_OK else { throw failure() }
@@ -77,6 +95,9 @@ final class SQLiteStore: RecordStore {
     func remove(_ id: String) throws {
         let query = try statement("DELETE FROM downloads WHERE id = ?"); defer { sqlite3_finalize(query) }
         guard sqlite3_bind_text(query, 1, id, -1, transient) == SQLITE_OK, sqlite3_step(query) == SQLITE_DONE else { throw failure() }
+        // Every stored item with headers was loaded or saved by this store first. Cleanup is
+        // best-effort: a Keychain failure must not halt the queue after the row is gone.
+        if protectedHeaders.removeValue(forKey: id) != nil { try? FairPlayVault.shared.removeHeaders(id) }
     }
     func configuration() throws -> [String: JSONValue] {
         let query = try statement("SELECT document FROM configuration WHERE id = 1"); defer { sqlite3_finalize(query) }

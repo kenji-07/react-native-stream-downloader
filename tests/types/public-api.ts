@@ -1,5 +1,5 @@
 import * as api from '../../src';
-import type { Config, DownloadOptions, DownloadStatus, DownloadedAsset, AvailableTracksByType, DRMConfig, DRMLicenseStatus, DRMLicenseStatusOptions, Metadata, TrackType, AudioTrack, TextTrack, VideoTrack } from '../../src';
+import type { Config, DownloadOptions, DownloadStatus, DownloadedAsset, AvailableTracksByType, AvailableTracksOptions, DRMConfig, DRMLicenseStatus, DRMLicenseStatusOptions, Metadata, TrackType, AudioTrack, TextTrack, VideoTrack } from '../../src';
 
 type Equal<A, B> = (<T>() => T extends A ? 1 : 2) extends (<T>() => T extends B ? 1 : 2) ? true : false;
 type Assert<T extends true> = T;
@@ -18,7 +18,7 @@ type Expected = {
   resumeDownload: (id: string) => Promise<void>;
   getDownloadStatus: (id: string) => Promise<DownloadStatus | null>;
   getDownloadsStatus: () => Promise<DownloadStatus[]>;
-  getAvailableTracks: (url: string) => Promise<AvailableTracksByType>;
+  getAvailableTracks: (url: string, options?: AvailableTracksOptions) => Promise<AvailableTracksByType>;
   getDownloadedAssets: () => Promise<DownloadedAsset[]>;
   getDownloadedAsset: (id: string) => Promise<DownloadedAsset | null>;
   deleteDownloadedAsset: (id: string) => Promise<void>;
@@ -34,7 +34,8 @@ type TracksMatch = Assert<Equal<TrackType, 'audio' | 'video' | 'text'>>;
 const drm: DRMConfig = { getLicense: (spc, contentId, url, loadedURL) => Promise.resolve(spc + contentId + url + loadedURL) };
 const metadata: Metadata = { arbitrary: { nested: true }, title: 'Typed title' };
 const trackTypes: [AudioTrack['type'], TextTrack['type'], VideoTrack['type']] = ['audio', 'text', 'video'];
-void [drm, metadata, trackTypes];
+const authorized: DownloadOptions = { headers: { Authorization: 'Bearer token', 'X-Key-Token': 'k' } };
+void [drm, metadata, trackTypes, authorized];
 api.registerPlugin();
 // @ts-expect-error registration accepts no arguments
 api.registerPlugin('sdsd');
@@ -47,6 +48,9 @@ api.useEvent('onDownloadProgress', statuses => { const value: DownloadStatus[] =
 api.useEvent('onPause', () => {});
 // @ts-expect-error progress payload is an array
 api.useEvent('onDownloadProgress', (status: DownloadStatus) => { void status; });
+// @ts-expect-error header values are strings
+const badHeaders: DownloadOptions = { headers: { 'X-Count': 1 } };
+void badHeaders;
 // @ts-expect-error expiry is numeric
 api.expireDownloadedAssetAt('id', new Date());
 // @ts-expect-error status is a type, not a runtime enum

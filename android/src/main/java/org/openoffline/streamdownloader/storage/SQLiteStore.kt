@@ -35,7 +35,8 @@ class SQLiteStore(context: Context, private val committed: (Record) -> Unit = {}
                 val protected = (data["protected"] as? String)?.let { ProtectedStorage.open(it, "record:$id") }
                 @Suppress("UNCHECKED_CAST") val storedOptions = data["options"] as Map<String, Any?>
                 // Legacy documents are readable; their next save removes plaintext DRM fields.
-                val options = storedOptions + (protected?.get("optionsDrm")?.let { mapOf("drm" to it) } ?: emptyMap())
+                val options = storedOptions + (protected?.get("optionsDrm")?.let { mapOf("drm" to it) } ?: emptyMap()) +
+                    (protected?.get("optionsHeaders")?.let { mapOf("headers" to it) } ?: emptyMap())
                 val offlineDrm = (protected?.get("playbackDrm") as? Map<*, *>)?.let {
                     OfflineDrm(it["scheme"] as String, it["keySetId"] as String)
                 }
@@ -65,10 +66,12 @@ class SQLiteStore(context: Context, private val committed: (Record) -> Unit = {}
                 // Android does not accept JS license callbacks. Never persist a runtime reference.
                 put("optionsDrm", drm.filterKeys { it != "callbackRef" })
             }
+            // Media request headers usually carry bearer tokens; keep them with the entitlements.
+            (record.options["headers"] as? Map<*, *>)?.let { put("optionsHeaders", it) }
             record.asset?.playback?.drm?.let { put("playbackDrm", mapOf("scheme" to it.scheme, "keySetId" to it.keySetId)) }
         }
         val document = mapOf(
-            "id" to record.id, "url" to record.url, "options" to record.options - "drm", "fingerprint" to record.fingerprint,
+            "id" to record.id, "url" to record.url, "options" to record.options - "drm" - "headers", "fingerprint" to record.fingerprint,
             "protected" to secrets.takeIf { it.isNotEmpty() }?.let { ProtectedStorage.seal(it, "record:${record.id}") },
             "retryCount" to record.retryCount, "nextRetryAt" to record.nextRetryAt,
             "order" to record.order, "generation" to record.generation, "state" to record.state.name, "progress" to record.progress,

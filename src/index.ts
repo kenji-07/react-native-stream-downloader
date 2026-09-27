@@ -10,5 +10,5 @@ export { useEvent } from './events/useEvent';
 export type {
   Config, DownloadOptions, DownloadStatus, DownloadedAsset, DRMConfig, Metadata,
   TrackType, AudioTrack, TextTrack, VideoTrack, AvailableTracksByType,
-  RetryPolicy, DRMLicenseStatus, DRMLicenseStatusOptions,
+  RetryPolicy, DRMLicenseStatus, DRMLicenseStatusOptions, AvailableTracksOptions,
 } from './types';

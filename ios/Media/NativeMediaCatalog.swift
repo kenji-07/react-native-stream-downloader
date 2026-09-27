@@ -20,8 +20,23 @@ enum NativeMediaCatalog {
         return URLSession(configuration: config)
     }()
 
-    static func read(_ url: URL, prefixOnly: Bool = false, wifiOnly: Bool = false) async throws -> (Data, URL) {
+    /// Application headers for every media request of a download: playlists, segments, HLS keys and MP4 bytes.
+    static func headers(_ options: [String: JSONValue]) -> [String: String] {
+        (options["headers"]?.object ?? [:]).compactMapValues(\.string)
+    }
+
+    static func assetOptions(wifiOnly: Bool, headers: [String: String]) -> [String: Any] {
+        var options: [String: Any] = [AVURLAssetAllowsCellularAccessKey: !wifiOnly]
+        // Undeclared in the SDK but long-standing: AVFoundation sends these on the
+        // asset's playlist, segment and AES-128 key requests, including from
+        // AVAssetDownloadTask, which inherits the asset's options.
+        if !headers.isEmpty { options["AVURLAssetHTTPHeaderFieldsKey"] = headers }
+        return options
+    }
+
+    static func read(_ url: URL, prefixOnly: Bool = false, wifiOnly: Bool = false, headers: [String: String] = [:]) async throws -> (Data, URL) {
         var request = URLRequest(url: url); request.allowsCellularAccess = !wifiOnly
+        for (name, value) in headers { request.setValue(value, forHTTPHeaderField: name) }
         if prefixOnly { request.setValue("bytes=0-1023", forHTTPHeaderField: "Range") }
         let (bytes, response) = try await session.bytes(for: request)
         defer { bytes.task.cancel() }
@@ -43,13 +58,13 @@ enum NativeMediaCatalog {
         return (data, response.url ?? url)
     }
 
-    static func inspect(_ url: URL, wifiOnly: Bool = false, prepareAsset: ((AVURLAsset) throws -> Void)? = nil) async throws -> MediaInspection {
-        let (prefix, _) = try await read(url, prefixOnly: true, wifiOnly: wifiOnly)
+    static func inspect(_ url: URL, wifiOnly: Bool = false, headers: [String: String] = [:], prepareAsset: ((AVURLAsset) throws -> Void)? = nil) async throws -> MediaInspection {
+        let (prefix, _) = try await read(url, prefixOnly: true, wifiOnly: wifiOnly, headers: headers)
         let text = String(decoding: prefix, as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines.union(CharacterSet(charactersIn: "\u{feff}")))
-        let asset = AVURLAsset(url: url, options: [AVURLAssetAllowsCellularAccessKey: !wifiOnly])
+        let asset = AVURLAsset(url: url, options: assetOptions(wifiOnly: wifiOnly, headers: headers))
         try prepareAsset?(asset)
         if text.hasPrefix("#EXTM3U") {
-            let (data, baseURL) = try await read(url, wifiOnly: wifiOnly)
+            let (data, baseURL) = try await read(url, wifiOnly: wifiOnly, headers: headers)
             let manifest = try HLSManifest(data: data, baseURL: baseURL)
             if !manifest.isMaster && !manifest.finite { throw OfflineError(code: "E_UNSUPPORTED_MEDIA", message: "Only finite HLS VOD playlists support offline download.") }
             let rows = manifest.isMaster ? manifest.tracks.map { $0.publicValue(baseURL: baseURL) }

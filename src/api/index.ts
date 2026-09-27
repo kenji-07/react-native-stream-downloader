@@ -1,4 +1,4 @@
-import type { AvailableTracksByType, Config, DownloadedAsset, DownloadOptions, DownloadStatus, DRMConfig, DRMLicenseStatus, DRMLicenseStatusOptions } from '../types';
+import type { AvailableTracksByType, AvailableTracksOptions, Config, DownloadedAsset, DownloadOptions, DownloadStatus, DRMConfig, DRMLicenseStatus, DRMLicenseStatusOptions } from '../types';
 import * as decode from '../internal/decode';
 import * as v from '../internal/validation';
 import { DownloaderError } from '../internal/errors';
@@ -84,7 +84,9 @@ export function getDownloadStatus(id: string): Promise<DownloadStatus | null> {
   return call('getDownloadStatus', () => ({ id: v.string(id, 'id', true) }), value => value === null ? null : decode.status(value));
 }
 export function getDownloadsStatus(): Promise<DownloadStatus[]> { return call('getDownloadsStatus', () => ({}), value => decode.array(value, decode.status)); }
-export function getAvailableTracks(url: string): Promise<AvailableTracksByType> { return call('getAvailableTracks', () => ({ url: v.url(url) }), decode.tracks); }
+export function getAvailableTracks(url: string, options?: AvailableTracksOptions): Promise<AvailableTracksByType> {
+  return call('getAvailableTracks', () => ({ url: v.url(url), ...v.trackOptions(options) }), decode.tracks);
+}
 export function getDownloadedAssets(): Promise<DownloadedAsset[]> { return call('getDownloadedAssets', () => ({}), value => decode.array(value, decode.asset)); }
 export function getDownloadedAsset(id: string): Promise<DownloadedAsset | null> {
   return call('getDownloadedAsset', () => ({ id: v.string(id, 'id', true) }), value => value === null ? null : decode.asset(value));

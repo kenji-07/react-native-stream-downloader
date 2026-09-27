@@ -21,6 +21,21 @@ enum Validation {
     static func keys(_ value: [String: JSONValue], _ allowed: Set<String>) throws {
         guard Set(value.keys).subtracting(allowed).isEmpty else { throw OfflineError.invalid("Unsupported object property.") }
     }
+    // AVFoundation and URLSession own Range for segments and resume; the rest describe the connection.
+    private static let reservedHeaders: Set<String> = ["host", "range", "content-length", "transfer-encoding", "connection"]
+    static func headers(_ value: JSONValue?, code: String = "E_INVALID_ARGUMENT", media: Bool = true) throws -> [String: JSONValue] {
+        let input = try object(value)
+        var seen = Set<String>()
+        for (key, item) in input {
+            // Scalars, not Characters: "\r\n" is a single Swift Character.
+            guard key.range(of: "^[!#$%&'*+.^_`|~0-9A-Za-z-]+$", options: .regularExpression) != nil, let text = item.string,
+                  !text.unicodeScalars.contains(where: { $0 == "\r" || $0 == "\n" || $0 == "\0" }), seen.insert(key.lowercased()).inserted else {
+                throw OfflineError(code: code, message: "HTTP headers are invalid.")
+            }
+            if media && reservedHeaders.contains(key.lowercased()) { throw OfflineError(code: code, message: "HTTP headers cannot set \(key).") }
+        }
+        return input
+    }
     static func params(_ method: String, _ value: [String: JSONValue]) throws -> [String: JSONValue] {
         switch method {
         case "registerPlugin", "disablePlugin", "getConfig", "getDownloadsStatus", "getDownloadedAssets", "cancelAllDownloads", "deleteAllDownloadedAssets", "deleteAllQueuedItems":
@@ -49,14 +64,16 @@ enum Validation {
             var result: [String: JSONValue] = ["id": .string(try string(value["id"]))]
             if let drm = value["drm"] { result["drm"] = try options(["drm": drm])["drm"] }
             return result
-        case "getAvailableTracks": return ["url": .string(try url(value["url"]))]
+        case "getAvailableTracks":
+            try keys(value, ["url", "headers"])
+            return ["url": .string(try url(value["url"])), "headers": .object(try value["headers"].map { try headers($0) } ?? [:])]
         case "expireDownloadedAssetAt": return ["id": .string(try string(value["id"])), "timestamp": .number(try integer(value["timestamp"]))]
         case "cancelDownload", "pauseDownload", "resumeDownload", "getDownloadStatus", "getDownloadedAsset", "deleteDownloadedAsset", "deleteQueuedItem": return ["id": .string(try string(value["id"]))]
         default: throw OfflineError(code: "E_BRIDGE", message: "Unknown native operation.")
         }
     }
     private static func options(_ value: [String: JSONValue]) throws -> [String: JSONValue] {
-        try keys(value, ["checkStorageBeforeDownload", "expiresAt", "includeAllTracks", "tracks", "drm", "metadata"])
+        try keys(value, ["checkStorageBeforeDownload", "expiresAt", "includeAllTracks", "tracks", "drm", "metadata", "headers"])
         var result = value
         for flag in ["checkStorageBeforeDownload", "includeAllTracks"] { if let v = value[flag], v.bool == nil { throw OfflineError.invalid("Download flags must be boolean.") } }
         if let expires = value["expiresAt"] { result["expiresAt"] = .number(try integer(expires)) }
@@ -84,12 +101,9 @@ enum Validation {
             if let server = config["licenseServer"] { _ = try url(server) }
             if let callback = config["callbackRef"] { _ = try string(callback) }
             guard config["licenseServer"] != nil || config["callbackRef"] != nil else { throw OfflineError(code: "E_INVALID_DRM", message: "FairPlay requires a license server or getLicense callback.") }
-            if let headers = config["headers"] {
-                for (key, item) in try object(headers) {
-                    guard key.range(of: "^[!#$%&'*+.^_`|~0-9A-Za-z-]+$", options: .regularExpression) != nil, let text = item.string, !text.contains(where: { $0 == "\r" || $0 == "\n" || $0 == "\0" }) else { throw OfflineError(code: "E_INVALID_DRM", message: "DRM headers are invalid.") }
-                }
-            }
+            if let entries = config["headers"] { _ = try headers(entries, code: "E_INVALID_DRM", media: false) }
         }
+        if let entries = value["headers"] { result["headers"] = .object(try headers(entries)) }
         return result
     }
 }

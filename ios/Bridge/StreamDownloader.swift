@@ -51,7 +51,8 @@ final class StreamDownloader: RCTEventEmitter {
                             Task {
                                 do {
                                     guard let value = params["url"]?.string, let url = URL(string: value) else { throw OfflineError.invalid("Invalid media URL.") }
-                                    resolve(try await NativeMediaCatalog.inspect(url, wifiOnly: wifiOnly).publicTracks)
+                                    let headers = NativeMediaCatalog.headers(params)
+                                    resolve(try await NativeMediaCatalog.inspect(url, wifiOnly: wifiOnly, headers: headers).publicTracks)
                                 } catch { self.reject(error as? OfflineError ?? OfflineError(code: "E_MEDIA_INSPECTION", message: "Native media track inspection failed."), "getAvailableTracks", reject) }
                             }
                         }
