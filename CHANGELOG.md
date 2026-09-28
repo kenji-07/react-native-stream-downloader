@@ -1,11 +1,11 @@
 # Changelog
 
-## Unreleased
+## 0.1.2
 
 - Add `DownloadOptions.headers` for media requests that require authentication, such as HLS AES-128 key URIs. Headers are sent with manifests, playlists, segments, keys and MP4 bytes, kept in protected storage for background resume, and never sent to DRM license servers.
 - Accept the same `headers` in `getAvailableTracks(url, options)`.
 
-## 0.1.0
+## 0.1.1
 
 - Publish the independent package as `react-native-stream-downloader` under Apache-2.0.
 - Provide the documented download API, local registration, events, persistent queue, configuration and asset management.
