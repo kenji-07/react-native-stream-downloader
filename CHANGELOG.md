@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.3
+
+- iOS: offline AES-128 HLS. AVFoundation keeps no AES-128 key in a `.movpkg`, so playback re-requested the `https` key without headers (401 → `NSURLErrorDomain -1013`) or failed offline. iOS downloads now send `X-Stream-Downloader-Keys: streamdl-key`; a server that rewrites AES-128 key URIs to `streamdl-key://` for those requests gets each key fetched once with the download headers, stored in the device-bound Keychain and served to the offline player (also to restored transfers and package verification). Deleting the asset removes its keys.
+- iOS: offline playback sends the stored download headers with remaining `https` key requests instead of none.
+- README: the "key is downloaded with the media" note now applies to Android only.
+
 ## 0.1.2
 
 - Add `DownloadOptions.headers` for media requests that require authentication, such as HLS AES-128 key URIs. Headers are sent with manifests, playlists, segments, keys and MP4 bytes, kept in protected storage for background resume, and never sent to DRM license servers.

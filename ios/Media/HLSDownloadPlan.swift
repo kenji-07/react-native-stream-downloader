@@ -7,6 +7,8 @@ struct HLSDownloadPlan {
     let duration: Double
     let estimatedBytes: Int64?
     let keyIdentifiers: Set<String>
+    /// `streamdl-key://` AES-128 keys of the selected renditions (`HLSClearKeys`).
+    let clearKeyURIs: Set<String>
     let requiresDRM: Bool
 
     static func prepare(_ inspection: MediaInspection, options: [String: JSONValue], title: String,
@@ -14,6 +16,7 @@ struct HLSDownloadPlan {
         guard let manifest = inspection.manifest else { throw OfflineError(code: "E_MANIFEST", message: "An HLS playlist is required.") }
         var requiresDRM = !manifest.isMaster && manifest.needsDRM
         var keyIdentifiers = Set<String>()
+        var clearKeyURIs = Set<String>()
         if requiresDRM && options["drm"] == nil { throw OfflineError(code: "E_DRM_REQUIRED", message: "Encrypted HLS requires persistent FairPlay configuration.") }
         let headers = NativeMediaCatalog.headers(options)
         let (rootData, rootURL) = try await NativeMediaCatalog.read(inspection.asset.url, wifiOnly: options["_wifiOnly"]?.bool ?? false, headers: headers)
@@ -24,7 +27,10 @@ struct HLSDownloadPlan {
         // A master may advertise session keys for unselected variants. Acquire
         // the key URIs in selected media playlists, where encryption applies.
         // Media-playlist input has no child pass, so inspect its keys here.
-        if !manifest.isMaster { keyIdentifiers.formUnion(try fairPlayIdentifiers(rootData)) }
+        if !manifest.isMaster {
+            keyIdentifiers.formUnion(try fairPlayIdentifiers(rootData))
+            clearKeyURIs.formUnion(try HLSClearKeys.keyURIs(rootData))
+        }
         let asset = inspection.asset
         let nativeVariants = try await asset.load(.variants)
         let selected: [HLSManifest.Track]
@@ -47,6 +53,7 @@ struct HLSDownloadPlan {
                     guard options["drm"] != nil else { throw OfflineError(code: "E_DRM_REQUIRED", message: "Encrypted HLS requires persistent FairPlay configuration.") }
                 }
                 keyIdentifiers.formUnion(try fairPlayIdentifiers(data))
+                clearKeyURIs.formUnion(try HLSClearKeys.keyURIs(data))
                 duration = max(duration, child.duration)
             }
             try await verifyEmbeddedSelections(descriptors, selected: selected, options: options, prepareAsset: prepareAsset)
@@ -76,7 +83,7 @@ struct HLSDownloadPlan {
         let estimate = bitrate * duration / 8000
         return HLSDownloadPlan(configuration: config, variants: variants, duration: duration,
             estimatedBytes: estimate.isFinite && estimate > 0 && estimate < Double(Int64.max) ? Int64(estimate.rounded(.up)) : nil,
-            keyIdentifiers: keyIdentifiers, requiresDRM: requiresDRM)
+            keyIdentifiers: keyIdentifiers, clearKeyURIs: clearKeyURIs, requiresDRM: requiresDRM)
     }
 
     private static func fairPlayIdentifiers(_ data: Data) throws -> Set<String> {

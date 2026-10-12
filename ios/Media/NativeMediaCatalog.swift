@@ -21,8 +21,13 @@ enum NativeMediaCatalog {
     }()
 
     /// Application headers for every media request of a download: playlists, segments, HLS keys and MP4 bytes.
+    /// Also advertises offline AES-128 key support (`HLSClearKeys`) unless the application set that header.
     static func headers(_ options: [String: JSONValue]) -> [String: String] {
-        (options["headers"]?.object ?? [:]).compactMapValues(\.string)
+        var result = (options["headers"]?.object ?? [:]).compactMapValues(\.string)
+        if !result.keys.contains(where: { $0.caseInsensitiveCompare(HLSClearKeys.capabilityHeader) == .orderedSame }) {
+            result[HLSClearKeys.capabilityHeader] = HLSClearKeys.scheme
+        }
+        return result
     }
 
     static func assetOptions(wifiOnly: Bool, headers: [String: String]) -> [String: Any] {

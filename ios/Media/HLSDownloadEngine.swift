@@ -18,6 +18,8 @@ final class HLSDownloadEngine: NSObject, AVAssetDownloadDelegate {
         var mediaSelections: [String: [Data]]?
         var variantReceiptVersion: Int?
         var wifiOnly: Bool?
+        /// `streamdl-key://` AES-128 keys stored in the Keychain (`HLSClearKeys`).
+        var clearKeys: [String]?
     }
     private final class Job: MediaTransfer {
         let record: DownloadRecord
@@ -59,6 +61,8 @@ final class HLSDownloadEngine: NSObject, AVAssetDownloadDelegate {
     private var tasks: [String: AVAssetDownloadTask] = [:]
     private var jobs: [String: Job] = [:]
     private var keyOwners: [String: FairPlaySession] = [:]
+    /// The resource loader holds its delegate weakly — keep each loader for its task.
+    private var clearKeyOwners: [String: HLSClearKeyLoader] = [:]
     private var cancellation: [String: DispatchSemaphore] = [:]
     private var restored = false
     private var restorationRemaining = 2
@@ -163,14 +167,27 @@ final class HLSDownloadEngine: NSObject, AVAssetDownloadDelegate {
             if let url = location(checkpoint), FileManager.default.fileExists(atPath: url.path) { try FileManager.default.removeItem(at: url) }
             try FileManager.default.removeItem(at: checkpointURL(record.id)); return nil
         }
+        if let uris = checkpoint.clearKeys, !uris.isEmpty {
+            // A task restored after relaunch has a fresh asset without the
+            // loader; the keys were stored before the original task started.
+            let loader = HLSClearKeyLoader(assetID: record.id, headers: NativeMediaCatalog.headers(record.options),
+                allowsNetwork: true, wifiOnly: checkpoint.wifiOnly ?? false)
+            loader.attach(task.urlAsset); clearKeyOwners[record.id] = loader
+        }
         let job = Job(record, task, self, progress, finished); jobs[record.id] = job
         observe(job); task.resume(); return job
     }
 
-    func start(_ record: DownloadRecord, inspection: MediaInspection, keys: FairPlaySession?, progress: @escaping (TransferProgress) -> Void, finished: @escaping (TransferResult) -> Void) async throws -> MediaTransfer {
+    func start(_ record: DownloadRecord, inspection: MediaInspection, keys: FairPlaySession?, clearKeys: HLSClearKeyLoader? = nil, progress: @escaping (TransferProgress) -> Void, finished: @escaping (TransferResult) -> Void) async throws -> MediaTransfer {
         await restoration(); try Task.checkCancellation()
         let title = record.options["metadata"]?.object?["title"]?.string ?? inspection.asset.url.lastPathComponent
-        let plan = try await HLSDownloadPlan.prepare(inspection, options: record.options, title: title, prepareAsset: { keys?.attach($0) })
+        let plan = try await HLSDownloadPlan.prepare(inspection, options: record.options, title: title, prepareAsset: { keys?.attach($0); clearKeys?.attach($0) })
+        if !plan.clearKeyURIs.isEmpty {
+            // AVFoundation keeps no AES-128 key in the package: store each one
+            // now, while the download's headers and token are still valid.
+            guard let clearKeys else { throw OfflineError(code: "E_UNSUPPORTED_CAPABILITY", message: "Offline AES-128 HLS keys need a key loader.") }
+            try await clearKeys.prefetch(plan.clearKeyURIs)
+        }
         if plan.requiresDRM {
             guard let keys, !plan.keyIdentifiers.isEmpty else { throw OfflineError(code: "E_DRM_REQUIRED", message: "The selected encrypted HLS package requires identifiable FairPlay keys.") }
             try await keys.prepare(plan.keyIdentifiers)
@@ -183,7 +200,7 @@ final class HLSDownloadEngine: NSObject, AVAssetDownloadDelegate {
         try Task.checkCancellation()
         let selections = try await selectionReceipt(plan, asset: inspection.asset)
         try Task.checkCancellation()
-        return try launch(record, plan: plan, selections: selections, keys: keys, progress: progress, finished: finished)
+        return try launch(record, plan: plan, selections: selections, keys: keys, clearKeys: clearKeys, progress: progress, finished: finished)
     }
     private func selectionReceipt(_ plan: HLSDownloadPlan, asset: AVURLAsset) async throws -> [String: [Data]] {
         let configurations = [plan.configuration.primaryContentConfiguration] + plan.configuration.auxiliaryContentConfigurations
@@ -195,7 +212,7 @@ final class HLSDownloadEngine: NSObject, AVAssetDownloadDelegate {
         }
         return receipt
     }
-    private func launch(_ record: DownloadRecord, plan: HLSDownloadPlan, selections: [String: [Data]], keys: FairPlaySession?, progress: @escaping (TransferProgress) -> Void, finished: @escaping (TransferResult) -> Void) throws -> MediaTransfer {
+    private func launch(_ record: DownloadRecord, plan: HLSDownloadPlan, selections: [String: [Data]], keys: FairPlaySession?, clearKeys: HLSClearKeyLoader?, progress: @escaping (TransferProgress) -> Void, finished: @escaping (TransferResult) -> Void) throws -> MediaTransfer {
         lock.lock(); defer { lock.unlock() }
         let signatures = plan.variants.map(Self.signature)
         guard Set(signatures).count == signatures.count else {
@@ -203,11 +220,12 @@ final class HLSDownloadEngine: NSObject, AVAssetDownloadDelegate {
         }
         let task = downloadSession(record).makeAssetDownloadTask(downloadConfiguration: plan.configuration)
         task.taskDescription = record.id
-        do { try save(Checkpoint(id: record.id, taskID: task.taskIdentifier, duration: plan.duration, variantSignatures: signatures, requiresDRM: plan.requiresDRM, keyIdentifiers: Array(plan.keyIdentifiers), mediaSelections: selections, variantReceiptVersion: 2, wifiOnly: record.options["_wifiOnly"]?.bool ?? false)) }
+        do { try save(Checkpoint(id: record.id, taskID: task.taskIdentifier, duration: plan.duration, variantSignatures: signatures, requiresDRM: plan.requiresDRM, keyIdentifiers: Array(plan.keyIdentifiers), mediaSelections: selections, variantReceiptVersion: 2, wifiOnly: record.options["_wifiOnly"]?.bool ?? false, clearKeys: plan.clearKeyURIs.isEmpty ? nil : plan.clearKeyURIs.sorted())) }
         catch { task.cancel(); throw OfflineError(code: "E_STORAGE", message: "The HLS transfer journal could not be saved.") }
         let job = Job(record, task, self, keys: keys, progress, finished)
         tasks[record.id] = task; jobs[record.id] = job
         if let keys { keyOwners[record.id] = keys }
+        if let clearKeys, !plan.clearKeyURIs.isEmpty { clearKeyOwners[record.id] = clearKeys }
         observe(job); task.resume(); return job
     }
     private func observe(_ job: Job) {
@@ -258,18 +276,21 @@ final class HLSDownloadEngine: NSObject, AVAssetDownloadDelegate {
         let receipt = checkpointURL(record.id)
         if FileManager.default.fileExists(atPath: receipt.path) { try FileManager.default.removeItem(at: receipt) }
         tasks.removeValue(forKey: record.id); jobs.removeValue(forKey: record.id); cancellation.removeValue(forKey: record.id)
-        keyOwners.removeValue(forKey: record.id)
+        keyOwners.removeValue(forKey: record.id); clearKeyOwners.removeValue(forKey: record.id)
     }
     private func settled(_ job: Job) {
         lock.lock(); defer { lock.unlock() }
         if jobs[job.record.id] === job { jobs.removeValue(forKey: job.record.id) }
-        if job.task == nil || job.task?.state == .completed { keyOwners.removeValue(forKey: job.record.id) }
+        if job.task == nil || job.task?.state == .completed {
+            keyOwners.removeValue(forKey: job.record.id); clearKeyOwners.removeValue(forKey: job.record.id)
+        }
     }
     func valid(_ record: DownloadRecord) -> Bool {
         lock.lock(); defer { lock.unlock() }
         guard let checkpoint = try? load(record.id), checkpoint.complete, !checkpoint.removing,
               let url = location(checkpoint), FileManager.default.fileExists(atPath: url.path) else { return false }
         if checkpoint.requiresDRM == true && (try? FairPlayVault.shared.hasKeys(record.id, identifiers: checkpoint.keyIdentifiers ?? [])) != true { return false }
+        if let uris = checkpoint.clearKeys, (try? FairPlayVault.shared.hasClearKeys(record.id, uris: uris)) != true { return false }
         return AVURLAsset(url: url).assetCache?.isPlayableOffline == true
     }
     private func verify(_ job: Job, _ checkpoint: Checkpoint) {
@@ -284,10 +305,17 @@ final class HLSDownloadEngine: NSObject, AVAssetDownloadDelegate {
                     try await verificationKeys?.prepare(Set(checkpoint.keyIdentifiers ?? []))
                     try await verificationKeys?.assertPersistentRights(required: true)
                 } else { verificationKeys = nil }
+                if let uris = checkpoint.clearKeys, try !FairPlayVault.shared.hasClearKeys(job.record.id, uris: uris) {
+                    throw OfflineError(code: "E_CORRUPT_ASSET", message: "An offline HLS AES-128 key is missing from protected storage.")
+                }
+                let verificationClearKeys = checkpoint.clearKeys == nil ? nil
+                    : HLSClearKeyLoader(assetID: job.record.id, headers: [:], allowsNetwork: false, wifiOnly: true)
+                verificationClearKeys?.attach(asset)
                 let duration = try await asset.load(.duration)
                 guard asset.assetCache?.isPlayableOffline == true, duration.seconds.isFinite, duration.seconds >= 0 else { throw OfflineError(code: "E_CORRUPT_ASSET", message: "AVFoundation did not confirm an offline-playable HLS package.") }
                 try await self.verifySelections(checkpoint, asset: asset)
                 withExtendedLifetime(verificationKeys) {}
+                withExtendedLifetime(verificationClearKeys) {}
                 try Task.checkCancellation(); guard !job.isStopped else { job.finish(.stopped); return }
                 job.finish(.complete(OfflineAsset(path: url.absoluteString, duration: (duration.seconds * 1000).rounded(.down), date: (Date().timeIntervalSince1970 * 1000).rounded(.down)), nil, nil))
             } catch {

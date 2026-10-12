@@ -73,7 +73,10 @@ final class OfflineVideoPlugin: RNVAVPlayerPlugin {
     private final class Owner: NSObject {
         private let lease: OfflineRoutes.Lease
         private let keys: FairPlaySession?
-        init(_ lease: OfflineRoutes.Lease, _ keys: FairPlaySession?) { self.lease = lease; self.keys = keys }
+        private let clearKeys: HLSClearKeyLoader?
+        init(_ lease: OfflineRoutes.Lease, _ keys: FairPlaySession?, _ clearKeys: HLSClearKeyLoader?) {
+            self.lease = lease; self.keys = keys; self.clearKeys = clearKeys
+        }
         deinit { keys?.cancel() }
     }
     private static var ownerKey: UInt8 = 0
@@ -85,16 +88,24 @@ final class OfflineVideoPlugin: RNVAVPlayerPlugin {
         guard match.owned else { return nil }
         guard let route = match.route, let lease = match.lease else { return unavailable() }
         do {
-            let prepared = AVURLAsset(url: route.url, options: [AVURLAssetAllowsCellularAccessKey: false,
-                AVURLAssetAllowsExpensiveNetworkAccessKey: false, AVURLAssetAllowsConstrainedNetworkAccessKey: false])
+            var options: [String: Any] = [AVURLAssetAllowsCellularAccessKey: false,
+                AVURLAssetAllowsExpensiveNetworkAccessKey: false, AVURLAssetAllowsConstrainedNetworkAccessKey: false]
+            // A package downloaded with `https` AES-128 key URIs still fetches its
+            // key at playback; send the download's headers instead of none (401).
+            let headers = NativeMediaCatalog.headers(route.record.options)
+            if !headers.isEmpty { options["AVURLAssetHTTPHeaderFieldsKey"] = headers }
+            let prepared = AVURLAsset(url: route.url, options: options)
             let keys: FairPlaySession?
             if route.record.options["drm"] != nil {
                 keys = try FairPlaySession(record: route.record, offlineOnly: true); keys?.attach(prepared)
             } else { keys = nil }
+            // `streamdl-key://` AES-128 keys come from the Keychain — playable offline.
+            let clearKeys = HLSClearKeyLoader(assetID: route.record.id, headers: headers, allowsNetwork: true, wifiOnly: true)
+            clearKeys.attach(prepared)
             // A managed HLS package must be wholly cached. A missing cache entry
             // becomes an invalid local asset, never an original network URL.
             if route.url.pathExtension == "movpkg", prepared.assetCache?.isPlayableOffline != true { return unavailable() }
-            objc_setAssociatedObject(prepared, &Self.ownerKey, Owner(lease, keys), .OBJC_ASSOCIATION_RETAIN_NONATOMIC)
+            objc_setAssociatedObject(prepared, &Self.ownerKey, Owner(lease, keys, clearKeys), .OBJC_ASSOCIATION_RETAIN_NONATOMIC)
             return OverridePlayerAssetResult(type: .full, asset: prepared)
         } catch { return unavailable() }
     }

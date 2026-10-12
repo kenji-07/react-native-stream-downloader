@@ -71,9 +71,24 @@ const available = await getAvailableTracks(url, { headers });
 await downloadStream(url, { headers, metadata: { title: 'Episode 1' } });
 ```
 
-The headers go with every media request of that download: manifests and playlists, segments, `#EXT-X-KEY` URIs and progressive MP4 bytes. The key is downloaded with the media, so offline playback needs no headers or network. Headers are stored in protected storage (Android Keystore, iOS Keychain) so background and restarted transfers keep authenticating, and they are never returned to JavaScript. They are not sent to DRM license servers; use `drm.headers` for those. `Host`, `Range`, `Content-Length`, `Transfer-Encoding` and `Connection` are managed by the downloader and rejected.
+The headers go with every media request of that download: manifests and playlists, segments, `#EXT-X-KEY` URIs and progressive MP4 bytes. On Android the AES-128 key is cached with the media, so offline playback needs no headers or network; on iOS see [Offline AES-128 HLS on iOS](#offline-aes-128-hls-on-ios). Headers are stored in protected storage (Android Keystore, iOS Keychain) so background and restarted transfers keep authenticating, and they are never returned to JavaScript. They are not sent to DRM license servers; use `drm.headers` for those. `Host`, `Range`, `Content-Length`, `Transfer-Encoding` and `Connection` are managed by the downloader and rejected.
 
 Headers are part of the download's identity: calling `downloadStream` again with a refreshed token queues a new download rather than updating the old one. Use tokens that outlive the transfer, or cancel and restart. On iOS, HLS headers are applied through AVFoundation's `AVURLAssetHTTPHeaderFieldsKey` asset option (as `react-native-video` does for playback); progressive MP4 and manifest inspection use ordinary request headers. Cookie-only authentication is not covered.
+
+### Offline AES-128 HLS on iOS
+
+AVFoundation never stores `METHOD=AES-128` keys in a downloaded `.movpkg`. At playback the player requests the playlist's `https` key URI again — without the download's headers, so an authenticated key server answers 401 (`NSURLErrorDomain -1013`), and not at all without a network. Only a custom URI scheme reaches the package's resource loader, so offline AES-128 needs one server-side switch:
+
+1. On iOS every media request of a download carries `X-Stream-Downloader-Keys: streamdl-key`.
+2. When a playlist request has that header, rewrite each AES-128 key URI from `https://` to `streamdl-key://` — same host, path and query — and do not cache that response for other clients (`Cache-Control: private, no-store`, `Vary: X-Stream-Downloader-Keys`).
+3. The package fetches each key once over HTTPS with the download's `headers` before the transfer starts, stores the 16-byte key in the device-bound Keychain and serves it to the offline player. Deleting the asset deletes its keys.
+
+```text
+#EXT-X-KEY:METHOD=AES-128,URI="https://cdn.example/key/42?token=…"        (normal players, Android)
+#EXT-X-KEY:METHOD=AES-128,URI="streamdl-key://cdn.example/key/42?token=…" (iOS downloads)
+```
+
+Without the rewrite the download still completes, but playback keeps depending on the key server: the package now sends the stored download headers with that request, which only helps while the device is online and the credentials remain valid. Assets downloaded by earlier versions keep `https` key URIs; download them again for offline playback. FairPlay (`SAMPLE-AES`, `skd://`) is unaffected.
 
 ## Supported implementation paths
 

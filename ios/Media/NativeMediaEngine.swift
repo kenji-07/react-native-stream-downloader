@@ -52,14 +52,18 @@ final class NativeMediaEngine: MediaEngine {
                 if let existing = try await hls.resume(record, progress: progress, finished: transfer.finish) { transfer.bind(existing); return }
                 guard let url = URL(string: record.url) else { throw OfflineError(code: "E_INVALID_URL", message: "Invalid media URL.") }
                 let keys = record.options["drm"] == nil ? nil : try FairPlaySession(record: record, offlineOnly: false)
+                // `streamdl-key://` AES-128 keys (`HLSClearKeys`) — fetched and
+                // stored during the download; encrypted track inspection needs them too.
+                let clearKeys = HLSClearKeyLoader(assetID: record.id, headers: NativeMediaCatalog.headers(record.options),
+                    allowsNetwork: true, wifiOnly: record.options["_wifiOnly"]?.bool ?? false)
                 let inspection: MediaInspection
                 do {
                     inspection = try await NativeMediaCatalog.inspect(url, wifiOnly: record.options["_wifiOnly"]?.bool ?? false,
-                        headers: NativeMediaCatalog.headers(record.options), prepareAsset: { keys?.attach($0) })
+                        headers: NativeMediaCatalog.headers(record.options), prepareAsset: { keys?.attach($0); clearKeys.attach($0) })
                     try Task.checkCancellation()
                 } catch { keys?.cancel(); throw error }
                 if inspection.kind == "hls" {
-                    do { transfer.bind(try await hls.start(record, inspection: inspection, keys: keys, progress: progress, finished: transfer.finish)) }
+                    do { transfer.bind(try await hls.start(record, inspection: inspection, keys: keys, clearKeys: clearKeys, progress: progress, finished: transfer.finish)) }
                     catch { keys?.cancel(); throw error }
                 } else {
                     guard record.options["drm"] == nil else { keys?.cancel(); throw OfflineError(code: "E_UNSUPPORTED_CAPABILITY", message: "Persistent FairPlay downloads require an HLS package.") }
@@ -121,6 +125,7 @@ final class NativeMediaEngine: MediaEngine {
             if hls.owns(record) { try hls.delete(record) }
             try files.delete(record)
             if record.options["drm"] != nil { try FairPlayVault.shared.remove(record.id) }
+            try FairPlayVault.shared.removeClearKeys(record.id)
         }
     }
     func valid(_ record: DownloadRecord) -> Bool { hls.owns(record) ? hls.valid(record) : files.valid(record) }

@@ -2,9 +2,11 @@ import Foundation
 import Security
 import CryptoKit
 
-/// Only opaque AVFoundation persistable blobs and provider configuration
-/// (including media request headers) enter this device-bound Keychain. No
-/// content key is extracted or serialized.
+/// Opaque AVFoundation persistable blobs, provider configuration (including
+/// media request headers) and offline AES-128 HLS keys (`HLSClearKeys`) enter
+/// this device-bound Keychain. No FairPlay content key is extracted or
+/// serialized; an AES-128 key is stored only because AVFoundation cannot
+/// persist it for offline playback itself.
 final class FairPlayVault {
     static let shared = FairPlayVault()
     private let lock = NSRecursiveLock()
@@ -82,6 +84,34 @@ final class FairPlayVault {
         lock.lock(); defer { lock.unlock() }
         let items = try keys(assetID)
         return !identifiers.isEmpty && identifiers.allSatisfy { items[identity($0)]?.isEmpty == false }
+    }
+    // MARK: AES-128 HLS keys (`HLSClearKeys`), by host + path identity.
+    private func clearKeys(_ assetID: String) throws -> [String: Data] {
+        guard let data = try read("aes:" + assetID) else { return [:] }
+        return try JSONDecoder().decode([String: Data].self, from: data)
+    }
+    func clearKey(_ assetID: String, uri: String) throws -> Data? {
+        lock.lock(); defer { lock.unlock() }
+        guard let name = HLSClearKeys.identity(uri) else { return nil }
+        return try clearKeys(assetID)[identity(name)]
+    }
+    func saveClearKey(_ data: Data, assetID: String, uri: String) throws {
+        lock.lock(); defer { lock.unlock() }
+        guard HLSClearKeys.isValidKey(data), let name = HLSClearKeys.identity(uri) else {
+            throw OfflineError(code: "E_INVALID_STREAM", message: "The HLS key is not a 16-byte AES-128 key.")
+        }
+        var items = try clearKeys(assetID); items[identity(name)] = data
+        try write("aes:" + assetID, JSONEncoder().encode(items))
+    }
+    func hasClearKeys(_ assetID: String, uris: [String]) throws -> Bool {
+        lock.lock(); defer { lock.unlock() }
+        let items = try clearKeys(assetID)
+        return uris.allSatisfy { uri in HLSClearKeys.identity(uri).map { items[identity($0)]?.isEmpty == false } ?? false }
+    }
+    func removeClearKeys(_ assetID: String) throws {
+        lock.lock(); defer { lock.unlock() }
+        let status = SecItemDelete(query("aes:" + assetID) as CFDictionary)
+        guard status == errSecSuccess || status == errSecItemNotFound else { throw failure() }
     }
     func remove(_ assetID: String) throws {
         lock.lock(); defer { lock.unlock() }
