@@ -34,7 +34,7 @@ android {
 }
 
 dependencies {
-    implementation 'com.facebook.react:react-android:0.74.7'
+    // implementation 'com.facebook.react:react-android:0.74.7'
     implementation project(':react-native-video')
     implementation "androidx.media3:media3-exoplayer:$media3Version"
     implementation "androidx.media3:media3-exoplayer-hls:$media3Version"

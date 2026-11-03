@@ -1,5 +1,28 @@
 # Changelog
 
+## 0.1.4
+- Added
+
+Added initial Expo Config Plugin support.
+
+Added configurable plugin options for native project configuration.
+
+Added TypeScript build configuration for the Expo plugin.
+
+- Changed
+
+Removed hard-coded React Native Android dependency version.
+
+Improved Android Gradle dependency compatibility.
+
+Updated package build and distribution configuration.
+
+- Fixed
+
+Fixed Expo Config Plugin TypeScript configuration.
+
+Improved compatibility with different React Native project configurations.
+
 ## 0.1.3
 
 - iOS: offline AES-128 HLS. AVFoundation keeps no AES-128 key in a `.movpkg`, so playback re-requested the `https` key without headers (401 → `NSURLErrorDomain -1013`) or failed offline. iOS downloads now send `X-Stream-Downloader-Keys: streamdl-key`; a server that rewrites AES-128 key URIs to `streamdl-key://` for those requests gets each key fetched once with the download headers, stored in the device-bound Keychain and served to the offline player (also to restored transfers and package verification). Deleting the asset removes its keys.
