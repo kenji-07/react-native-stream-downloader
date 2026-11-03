@@ -1,6 +1,6 @@
 {
   "name": "react-native-stream-downloader",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "description": "Offline HLS, DASH and MP4 downloads for React Native with track selection, DRM and react-native-video integration.",
   "main": "lib/index.js",
   "types": "lib/index.d.ts",
@@ -11,6 +11,7 @@
       "react-native": "./src/index.ts",
       "default": "./lib/index.js"
     },
+    "./app.plugin.js": "./app.plugin.js",
     "./package.json": "./package.json"
   },
   "files": [
@@ -31,7 +32,7 @@
     "RELEASING.md"
   ],
   "scripts": {
-    "build": "tsc -p tsconfig.build.json",
+    "build": "tsc -p tsconfig.build.json && npm run build:plugin",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "npm run build && jest --runInBand",
     "check": "npm run typecheck && npm test",
