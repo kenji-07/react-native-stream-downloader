@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.5
+
+- Fixed Expo prebuild plugin resolution by exporting `./app.plugin.js` from the package.
+- Build the Expo config plugin as part of the package build so its published entry point is available.
+
 ## 0.1.4
 - Added
 
