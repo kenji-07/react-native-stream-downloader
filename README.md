@@ -10,7 +10,7 @@ cd ios
 pod install
 ```
 
-Requires React Native 0.74+, React 18.2+, react-native-video 6.15–6.x, Android API 23+ or iOS 15+. Expo apps require a native development build; this native module is not included in Expo Go. Rebuild the native app after installation.
+Requires React Native 0.74+, React 18.2+, react-native-video 6.15–6.x, Android API 23+ or iOS 15+. Android builds use Media3 1.8.0 or later; set the host project's `media3Version` accordingly if it overrides the package default. Expo apps require a native development build; this native module is not included in Expo Go. Rebuild the native app after installation.
 
 ## Usage
 

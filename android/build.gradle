@@ -10,7 +10,7 @@ apply plugin: 'com.android.library'
 apply plugin: 'org.jetbrains.kotlin.android'
 
 def setting = { name, fallback -> rootProject.ext.has(name) ? rootProject.ext.get(name) : fallback }
-def media3Version = setting('media3Version', '1.4.1')
+def media3Version = setting('media3Version', '1.8.0')
 
 // Respect hosts that centrally manage dependency repositories. The supplied
 // verification/example settings include these repositories for that mode.
@@ -34,7 +34,7 @@ android {
 }
 
 dependencies {
-    // implementation 'com.facebook.react:react-android:0.74.7'
+    compileOnly 'com.facebook.react:react-android'
     implementation project(':react-native-video')
     implementation "androidx.media3:media3-exoplayer:$media3Version"
     implementation "androidx.media3:media3-exoplayer-hls:$media3Version"
