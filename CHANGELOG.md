@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.6
+
+- Fixed Android compilation when React Native APIs are not exposed transitively by `react-native-video`.
+- Updated Android Media3 compatibility to 1.8.0 and handled the updated track-preparation callback.
+
 ## 0.1.5
 
 - Fixed Expo prebuild plugin resolution by exporting `./app.plugin.js` from the package.

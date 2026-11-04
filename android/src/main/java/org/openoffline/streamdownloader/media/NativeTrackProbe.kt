@@ -34,7 +34,13 @@ internal object NativeTrackProbe {
                     TrackSelectionParameters.DEFAULT_WITHOUT_CONTEXT, null, factory,
                 ).also { probe ->
                     probe.prepare(object : DownloadHelper.Callback {
-                        override fun onPrepared(helper: DownloadHelper) {
+                        override fun onPrepared(helper: DownloadHelper, tracksInfoAvailable: Boolean) {
+                            if (!tracksInfoAvailable) {
+                                result.completeExceptionally(
+                                    DownloadFailure("E_INVALID_STREAM", "Media track information is unavailable.")
+                                )
+                                return
+                            }
                             try {
                                 val formats = buildList {
                                     for (period in 0 until helper.periodCount) {
