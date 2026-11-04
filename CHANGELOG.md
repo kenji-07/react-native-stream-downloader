@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.7
+
+- Fixed Android builds with modern Gradle by removing late mutations to the consuming app's `implementation` configuration. Declare any app-owned AAR files in the app's own Gradle configuration.
+
 ## 0.1.6
 
 - Fixed Android compilation when React Native APIs are not exposed transitively by `react-native-video`.

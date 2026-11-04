@@ -48,12 +48,3 @@ dependencies {
 tasks.withType(Test).configureEach {
     systemProperty 'robolectric.dependency.repo.url', 'https://repo.maven.apache.org/maven2'
 }
-
-// AARs belong to the consuming application, not inside a library AAR. Autolink
-// the conventional app's native-libs directory without changing other modules.
-def applicationProject = rootProject.findProject(':app')
-if (applicationProject != null) {
-    applicationProject.pluginManager.withPlugin('com.android.application') {
-        applicationProject.dependencies.add('implementation', applicationProject.fileTree(dir: 'native-libs', include: ['*.aar']))
-    }
-}
