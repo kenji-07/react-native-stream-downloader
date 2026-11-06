@@ -4,7 +4,7 @@ import android.content.Context
 import android.os.Handler
 import android.os.Looper
 import androidx.media3.common.util.UnstableApi
-import com.brentvatne.react.ReactNativeVideoManager
+import com.twg.video.core.plugins.PluginsRegistry
 import java.util.concurrent.CompletableFuture
 import org.openoffline.streamdownloader.core.OfflineQueue
 import org.openoffline.streamdownloader.media.Media3Engine
@@ -54,7 +54,7 @@ internal class NativeRuntime private constructor(context: Context) {
         val result = CompletableFuture<Unit>()
         Handler(Looper.getMainLooper()).post {
             try {
-                if (!installed) { ReactNativeVideoManager.getInstance().registerPlugin(plugin); installed = true }
+                if (!installed) { PluginsRegistry.shared.register(plugin); installed = true }
                 result.complete(Unit)
             } catch (error: Throwable) { result.completeExceptionally(error) }
         }

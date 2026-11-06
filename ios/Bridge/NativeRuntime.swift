@@ -1,6 +1,6 @@
 import Foundation
 import Network
-import react_native_video
+import ReactNativeVideo
 
 final class NativeRuntime {
     private static let initializationLock = NSLock()
@@ -21,8 +21,7 @@ final class NativeRuntime {
         let store = try SQLiteStore(directory: base)
         let engine = try NativeMediaEngine(directory: base.appendingPathComponent("media", isDirectory: true))
         let plugin = OfflineVideoPlugin(routes: engine.routes); playerPlugin = plugin
-        if Thread.isMainThread { ReactNativeVideoManager.shared.registerPlugin(plugin: plugin) }
-        else { DispatchQueue.main.sync { ReactNativeVideoManager.shared.registerPlugin(plugin: plugin) } }
+        PluginsRegistry.shared.register(plugin: plugin)
         queue = OfflineQueue(store: store, engine: engine) { [weak self] name, payload in
             guard let self else { return }
             self.observerLock.lock(); let observer = self.observer; self.observerLock.unlock()

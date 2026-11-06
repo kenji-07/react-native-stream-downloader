@@ -18,6 +18,6 @@ Pod::Spec.new do |s|
   s.frameworks = 'AVFoundation', 'Security'
   s.libraries = 'sqlite3'
   s.dependency 'React-Core'
-  s.dependency 'react-native-video', '>= 6.15.0', '< 7.0'
+  s.dependency 'ReactNativeVideo'
   s.pod_target_xcconfig = { 'DEFINES_MODULE' => 'YES' }
 end

@@ -1,38 +1,38 @@
 package org.openoffline.streamdownloader.media
 
+import android.net.Uri
 import androidx.media3.common.MediaItem
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.DataSource
 import androidx.media3.datasource.PlaceholderDataSource
-import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.exoplayer.source.MediaSource
 import androidx.media3.exoplayer.source.WrappingMediaSource
 import androidx.media3.exoplayer.drm.DrmSessionManagerProvider
 import androidx.media3.exoplayer.upstream.LoadErrorHandlingPolicy
 import java.io.IOException
-import com.brentvatne.common.api.Source
-import com.brentvatne.exoplayer.RNVExoplayerPlugin
+import com.twg.video.core.plugins.NativeVideoPlayerSource
+import com.twg.video.core.plugins.ReactNativeVideoPlugin
 
 @UnstableApi
-class OfflineVideoPlugin(private val routes: OfflineRoutes, private val engine: Media3Engine) : RNVExoplayerPlugin {
-    override fun onInstanceCreated(id: String, player: ExoPlayer) = Unit
-    override fun onInstanceRemoved(id: String, player: ExoPlayer) = Unit
-    override fun shouldDisableCache(source: Source): Boolean = routes.owns(source.uri)
-    override fun overrideMediaItemBuilder(source: Source, mediaItemBuilder: MediaItem.Builder): MediaItem.Builder? {
-        val route = routes.get(source.uri) ?: return null
+class OfflineVideoPlugin(private val routes: OfflineRoutes, private val engine: Media3Engine) : ReactNativeVideoPlugin("StreamDownloaderOffline") {
+    private fun uri(source: NativeVideoPlayerSource): Uri? = try { Uri.parse(source.uri) } catch (_: Throwable) { null }
+
+    override fun shouldDisableCache(source: NativeVideoPlayerSource): Boolean = routes.owns(uri(source))
+    override fun getMediaItemBuilder(source: NativeVideoPlayerSource, mediaItemBuilder: MediaItem.Builder): MediaItem.Builder? {
+        val route = routes.get(uri(source)) ?: return null
         return mediaItemBuilder.setUri(route.url).setMediaId(route.id).setMimeType(route.mimeType).setStreamKeys(route.streamKeys)
             .setDrmConfiguration(route.drm?.let(engine::drmConfiguration))
     }
-    override fun overrideMediaDataSourceFactory(source: Source, mediaDataSourceFactory: DataSource.Factory): DataSource.Factory? {
-        if (!routes.owns(source.uri)) return null
-        val route = routes.get(source.uri) ?: return PlaceholderDataSource.FACTORY
+    override fun getMediaDataSourceFactory(source: NativeVideoPlayerSource, mediaDataSourceFactory: DataSource.Factory): DataSource.Factory? {
+        if (!routes.owns(uri(source))) return null
+        val route = routes.get(uri(source)) ?: return PlaceholderDataSource.FACTORY
         return routes.leased(route, engine.factory(route.id, false))
     }
 
-    override fun overrideMediaSourceFactory(source: Source, mediaSourceFactory: MediaSource.Factory, mediaDataSourceFactory: DataSource.Factory): MediaSource.Factory? {
-        if (!routes.owns(source.uri)) return null
-        val route = routes.get(source.uri)
+    override fun getMediaSourceFactory(source: NativeVideoPlayerSource, mediaSourceFactory: MediaSource.Factory, mediaDataSourceFactory: DataSource.Factory): MediaSource.Factory? {
+        if (!routes.owns(uri(source))) return null
+        val route = routes.get(uri(source))
         // RNV creates a separate DASH manifest source. Replace the whole factory
         // so manifest, initialization, index and segment reads share cache-only IO.
         val delegate = DefaultMediaSourceFactory(if (route == null) PlaceholderDataSource.FACTORY else engine.factory(route.id, false))

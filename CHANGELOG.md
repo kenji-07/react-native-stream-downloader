@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.8
+
+- Updated compatibility for `react-native-video` v7 (`ReactNativeVideo`).
+- Updated iOS CocoaPods podspec dependency to `ReactNativeVideo`.
+- Migrated iOS plugin registration to `PluginsRegistry.shared` and `ReactNativeVideoPlugin.overrideSource`.
+- Migrated Android plugin hooks to `com.twg.video.core.plugins.ReactNativeVideoPlugin` and `PluginsRegistry`.
+
 ## 0.1.7
 
 - Fixed Android builds with modern Gradle by removing late mutations to the consuming app's `implementation` configuration. Declare any app-owned AAR files in the app's own Gradle configuration.

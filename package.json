@@ -1,6 +1,6 @@
 {
   "name": "react-native-stream-downloader",
-  "version": "0.1.7",
+  "version": "0.1.8",
   "description": "Offline HLS, DASH and MP4 downloads for React Native with track selection, DRM and react-native-video integration.",
   "main": "lib/index.js",
   "types": "lib/index.d.ts",
@@ -46,7 +46,7 @@
     "react": ">=18.2.0",
     "react-native": ">=0.74.0",
     "react-native-nitro-modules": ">=0.35.0",
-    "react-native-video": ">=6.15.0 <7"
+    "react-native-video": ">=7.0.0-beta.0"
   },
   "peerDependenciesMeta": {
     "react-native-nitro-modules": {

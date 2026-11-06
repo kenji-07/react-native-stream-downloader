@@ -188,10 +188,18 @@ final class FairPlaySession: NSObject, AVContentKeySessionDelegate {
             throw OfflineError(code: "E_INVALID_DRM", message: "A FairPlay application certificate URL is required.")
         }
         let transport = FairPlayTransport(wifiOnly: wifiOnly)
-        let certificate = try await transport.fetch(URLRequest(url: certificateURL), limit: 1024 * 1024)
+        // [awaken-patch] bunny fairplay: certificate хүсэлтэд drm.headers, Bunny-ийн skd host-ийг base64 decode.
+        var certificateRequest = URLRequest(url: certificateURL)
+        for (name, value) in configuration["headers"]?.object ?? [:]
+            where name.caseInsensitiveCompare("Content-Type") != .orderedSame {
+            certificateRequest.setValue(value.string, forHTTPHeaderField: name)
+        }
+        let certificate = try await transport.fetch(certificateRequest, limit: 1024 * 1024)
         let contentID = URL(string: identifier)?.host ?? identifier
+        let isBunnyLicense = (configuration["licenseServer"]?.string ?? "").contains("bunnycdn.com")
+        let contentIdentifier = (isBunnyLicense ? Data(base64Encoded: contentID) : nil) ?? Data(contentID.utf8)
         let spc: Data = try await withCheckedThrowingContinuation { continuation in
-            request.makeStreamingContentKeyRequestData(forApp: certificate, contentIdentifier: Data(contentID.utf8), options: nil) { data, error in
+            request.makeStreamingContentKeyRequestData(forApp: certificate, contentIdentifier: contentIdentifier, options: nil) { data, error in
                 if let data, !data.isEmpty { continuation.resume(returning: data) }
                 else { continuation.resume(throwing: OfflineError(code: "E_DRM_LICENSE", message: "AVFoundation could not create a persistent license request.")) }
             }

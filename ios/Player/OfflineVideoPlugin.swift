@@ -1,7 +1,7 @@
 import Foundation
 import AVFoundation
 import ObjectiveC
-import react_native_video
+import ReactNativeVideo
 
 /// All player hooks consult this short in-memory boundary, never SQLite.
 final class OfflineRoutes {
@@ -69,7 +69,7 @@ final class OfflineRoutes {
 
 /// Associate ownership with the prepared AVAsset rather than a global DRM
 /// manager. Releasing the player item releases both the key session and lease.
-final class OfflineVideoPlugin: RNVAVPlayerPlugin {
+final class OfflineVideoPlugin: ReactNativeVideoPlugin {
     private final class Owner: NSObject {
         private let lease: OfflineRoutes.Lease
         private let keys: FairPlaySession?
@@ -81,15 +81,21 @@ final class OfflineVideoPlugin: RNVAVPlayerPlugin {
     }
     private static var ownerKey: UInt8 = 0
     private let routes: OfflineRoutes
-    init(routes: OfflineRoutes) { self.routes = routes; super.init() }
-    override func overridePlayerAsset(source: VideoSource, asset: AVAsset) async -> OverridePlayerAssetResult? {
-        guard let original = asset as? AVURLAsset, original.url.isFileURL else { return nil }
-        let match = routes.acquire(original.url)
-        guard match.owned else { return nil }
-        guard let route = match.route, let lease = match.lease else { return unavailable() }
+    init(routes: OfflineRoutes) { self.routes = routes; super.init(name: "OfflineVideoPlugin") }
+    override func overrideSource(source: NativeVideoPlayerSource) async -> NativeVideoPlayerSource {
+        guard source.url.isFileURL else { return source }
+        let match = routes.acquire(source.url)
+        guard match.owned else { return source }
+        guard let route = match.route, let lease = match.lease else {
+            source.asset = unavailable()
+            return source
+        }
         do {
-            var options: [String: Any] = [AVURLAssetAllowsCellularAccessKey: false,
-                AVURLAssetAllowsExpensiveNetworkAccessKey: false, AVURLAssetAllowsConstrainedNetworkAccessKey: false]
+            var options: [String: Any] = [
+                AVURLAssetAllowsCellularAccessKey: false,
+                AVURLAssetAllowsExpensiveNetworkAccessKey: false,
+                AVURLAssetAllowsConstrainedNetworkAccessKey: false
+            ]
             // A package downloaded with `https` AES-128 key URIs still fetches its
             // key at playback; send the download's headers instead of none (401).
             let headers = NativeMediaCatalog.headers(route.record.options)
@@ -104,13 +110,20 @@ final class OfflineVideoPlugin: RNVAVPlayerPlugin {
             clearKeys.attach(prepared)
             // A managed HLS package must be wholly cached. A missing cache entry
             // becomes an invalid local asset, never an original network URL.
-            if route.url.pathExtension == "movpkg", prepared.assetCache?.isPlayableOffline != true { return unavailable() }
+            if route.url.pathExtension == "movpkg", prepared.assetCache?.isPlayableOffline != true {
+                source.asset = unavailable()
+                return source
+            }
             objc_setAssociatedObject(prepared, &Self.ownerKey, Owner(lease, keys, clearKeys), .OBJC_ASSOCIATION_RETAIN_NONATOMIC)
-            return OverridePlayerAssetResult(type: .full, asset: prepared)
-        } catch { return unavailable() }
+            source.asset = prepared
+            return source
+        } catch {
+            source.asset = unavailable()
+            return source
+        }
     }
-    private func unavailable() -> OverridePlayerAssetResult {
+    private func unavailable() -> AVAsset {
         let url = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("stream-downloader-unavailable-" + UUID().uuidString)
-        return OverridePlayerAssetResult(type: .full, asset: AVURLAsset(url: url))
+        return AVURLAsset(url: url)
     }
 }
