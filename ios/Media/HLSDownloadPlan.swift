@@ -137,18 +137,22 @@ struct HLSDownloadPlan {
     }
 
     private static func match(_ descriptor: HLSManifest.Track, in variants: [AVAssetVariant]) throws -> AVAssetVariant {
-        let matches: [AVAssetVariant] = variants.filter { (variant: AVAssetVariant) -> Bool in
+        var matches: [AVAssetVariant] = []
+        for variant in variants {
             if #available(iOS 26.0, macOS 26.0, *), let uri = descriptor.uri,
-               HLSManifest.resourceIdentity(variant.url) != HLSManifest.resourceIdentity(uri) { return false }
-            if let bandwidth = descriptor.attributes["BANDWIDTH"].flatMap(Double.init), variant.peakBitRate != bandwidth { return false }
-            if let average = descriptor.attributes["AVERAGE-BANDWIDTH"].flatMap(Double.init), variant.averageBitRate != average { return false }
+               HLSManifest.resourceIdentity(variant.url) != HLSManifest.resourceIdentity(uri) { continue }
+            if let bandwidth = descriptor.attributes["BANDWIDTH"].flatMap(Double.init), variant.peakBitRate != bandwidth { continue }
+            if let average = descriptor.attributes["AVERAGE-BANDWIDTH"].flatMap(Double.init), variant.averageBitRate != average { continue }
             if let resolution = descriptor.attributes["RESOLUTION"]?.split(separator: "x"), resolution.count == 2,
                let width = Double(resolution[0]), let height = Double(resolution[1]) {
-                guard variant.videoAttributes?.presentationSize == CGSize(width: width, height: height) else { return false }
+                guard variant.videoAttributes?.presentationSize == CGSize(width: width, height: height) else { continue }
             }
-            if let fps = descriptor.attributes["FRAME-RATE"].flatMap(Double.init), let native = variant.videoAttributes?.nominalFrameRate,
-               abs(native - fps) > 0.01 { return false }
-            return true
+            if let fps = descriptor.attributes["FRAME-RATE"].flatMap(Double.init),
+               let native = variant.videoAttributes?.nominalFrameRate {
+                let diff = Double(native) - fps
+                if diff > 0.01 || diff < -0.01 { continue }
+            }
+            matches.append(variant)
         }
         guard matches.count == 1 else { throw ambiguous("The selected HLS variant cannot be mapped uniquely on this OS version.") }
         return matches[0]
