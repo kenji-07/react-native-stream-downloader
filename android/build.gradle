@@ -36,6 +36,10 @@ android {
 dependencies {
     compileOnly 'com.facebook.react:react-android'
     implementation project(':react-native-video')
+    def nitroProject = rootProject.findProject(':react-native-nitro-modules') ?: findProject(':react-native-nitro-modules')
+    if (nitroProject != null) {
+        implementation nitroProject
+    }
     implementation "androidx.media3:media3-exoplayer:$media3Version"
     implementation "androidx.media3:media3-exoplayer-hls:$media3Version"
     implementation "androidx.media3:media3-exoplayer-dash:$media3Version"

@@ -83,6 +83,7 @@ final class OfflineVideoPlugin: ReactNativeVideoPlugin {
     private let routes: OfflineRoutes
     init(routes: OfflineRoutes) { self.routes = routes; super.init(name: "OfflineVideoPlugin") }
     override func overrideSource(source: NativeVideoPlayerSource) async -> NativeVideoPlayerSource {
+        var source = source
         guard source.url.isFileURL else { return source }
         let match = routes.acquire(source.url)
         guard match.owned else { return source }

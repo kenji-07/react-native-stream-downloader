@@ -1,9 +1,15 @@
 # Changelog
 
+## 0.1.9
+
+- Fixed iOS `OfflineVideoPlugin.swift` parameter mutability when overriding player asset source.
+- Fixed iOS CocoaPods compilation with `NitroModules` using Objective-C++ (`objcxx`) and C++20 standard.
+- Fixed Android Kotlin compilation by adding `:react-native-nitro-modules` dependency to resolve `HybridObject` supertype.
+
 ## 0.1.8
 
 - Updated compatibility for `react-native-video` v7 (`ReactNativeVideo`).
-- Updated iOS CocoaPods podspec dependency to `ReactNativeVideo`.
+- Updated iOS CocoaPods podspec dependency to `ReactNativeVideo` and `NitroModules` with Objective-C++ C++20 interop.
 - Migrated iOS plugin registration to `PluginsRegistry.shared` and `ReactNativeVideoPlugin.overrideSource`.
 - Migrated Android plugin hooks to `com.twg.video.core.plugins.ReactNativeVideoPlugin` and `PluginsRegistry`.
 

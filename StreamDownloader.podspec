@@ -19,5 +19,13 @@ Pod::Spec.new do |s|
   s.libraries = 'sqlite3'
   s.dependency 'React-Core'
   s.dependency 'ReactNativeVideo'
-  s.pod_target_xcconfig = { 'DEFINES_MODULE' => 'YES' }
+  s.dependency 'NitroModules'
+  s.compiler_flags = '-x objective-c++'
+  s.pod_target_xcconfig = {
+    'DEFINES_MODULE' => 'YES',
+    'SWIFT_OBJC_INTEROP_MODE' => 'objcxx',
+    'CLANG_CXX_LANGUAGE_STANDARD' => 'c++20',
+    'CLANG_CXX_LIBRARY' => 'libc++',
+    'OTHER_CPLUSPLUSFLAGS' => '$(inherited) -DFOLLY_NO_CONFIG -DFOLLY_MOBILE=1 -DFOLLY_USE_LIBCPP=1'
+  }
 end
