@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.9.1
+
+- Fixed iOS Swift `PropertyListSerialization.propertyList` type inference with explicit `ReadOptions`.
+- Fixed iOS Swift `HLSDownloadPlan` frame rate comparison ambiguity under C++ interop.
+
 ## 0.1.9
 
 - Fixed iOS `OfflineVideoPlugin.swift` parameter mutability when overriding player asset source.
