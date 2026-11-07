@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.1.9.1
+## 0.1.10
 
 - Fixed iOS Swift `PropertyListSerialization.propertyList` type inference with explicit `ReadOptions`.
 - Fixed iOS Swift `HLSDownloadPlan` frame rate comparison ambiguity under C++ interop.
