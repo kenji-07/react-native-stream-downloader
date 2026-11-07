@@ -335,7 +335,7 @@ final class HLSDownloadEngine: NSObject, AVAssetDownloadDelegate {
             }
             let cached = cache.mediaSelectionOptions(in: group)
             for data in expected {
-                let propertyList = try PropertyListSerialization.propertyList(from: data, options: [], format: nil)
+                let propertyList = try PropertyListSerialization.propertyList(from: data, options: PropertyListSerialization.ReadOptions(), format: nil)
                 guard let option = group.mediaSelectionOption(withPropertyList: propertyList), cached.contains(option) else {
                     throw OfflineError(code: "E_CORRUPT_ASSET", message: "A selected HLS audio or subtitle rendition is not available offline.")
                 }

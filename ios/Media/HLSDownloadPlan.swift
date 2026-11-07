@@ -1,5 +1,6 @@
 import Foundation
 import AVFoundation
+import CoreGraphics
 
 struct HLSDownloadPlan {
     let configuration: AVAssetDownloadConfiguration
@@ -136,7 +137,7 @@ struct HLSDownloadPlan {
     }
 
     private static func match(_ descriptor: HLSManifest.Track, in variants: [AVAssetVariant]) throws -> AVAssetVariant {
-        let matches = variants.filter { variant in
+        let matches: [AVAssetVariant] = variants.filter { (variant: AVAssetVariant) -> Bool in
             if #available(iOS 26.0, macOS 26.0, *), let uri = descriptor.uri,
                HLSManifest.resourceIdentity(variant.url) != HLSManifest.resourceIdentity(uri) { return false }
             if let bandwidth = descriptor.attributes["BANDWIDTH"].flatMap(Double.init), variant.peakBitRate != bandwidth { return false }
